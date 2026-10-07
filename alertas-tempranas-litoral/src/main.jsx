@@ -75,7 +75,7 @@ function normalizeRecord(row){
   const asignatura=pick(row,['asignatura','materia','curso'])
   const modalidad=pick(row,['modalidad'])
   const bloque=pick(row,['bloque'])
-  const periodo=pick(row,['periodo','periodo_academico','periodo_academico_','semestre','periodo_lectivo'])
+  const periodo=pick(row,['periodo','periodo_academico','periodo_academico_','semestre','periodo_lectivo']) || '2026-2'
   const porcentaje=pct(pick(row,['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje']))
   const promedio=num(pick(row,['promedio_evaluacion','promedio','nota','nota_actual','acumulado']))
   const perdidoRaw=String(pick(row,['perdio','perdido','en_riesgo','riesgo'])).toLowerCase()
