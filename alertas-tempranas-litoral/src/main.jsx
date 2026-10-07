@@ -10,7 +10,9 @@ import './styles.css'
 
 const SHEET_ID = '1mMGppki5Eh3aYcOOKYPoyvSKA119hMlW'
 const SHEET_GID = '260302609'
+const SHEET_NAME = 'Notas'
 const SHEET_CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Notas`,
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`,
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
 ]
@@ -89,34 +91,34 @@ function pct(v){
 
 function normalizeRecord(row){
   const estudiante=pickFuzzy(row,
-    ['estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'],
+    ['Nombre_completo','estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'],
     [['nombre','estudiante'],['estudiante']]
   )
   const documento=pickFuzzy(row,
-    ['documento','identificacion','cedula','numero_documento'],
+    ['Numero_identificacion','documento','identificacion','cedula','numero_documento'],
     [['documento'],['identificacion'],['cedula']]
   )
   const programa=pickFuzzy(row,
-    ['nombre_programa','programa','programa_academico'],
+    ['Nombre_programa','nombre_programa','programa','programa_academico'],
     [['nombre','programa'],['programa']]
   )
   const snies=pickFuzzy(row,['snies','codigo_snies'],[['snies']])
   const docente=pickFuzzy(row,['docente','nombre_docente','profesor'],[['nombre','docente'],['docente'],['profesor']])
-  const asignatura=pickFuzzy(row,['asignatura','materia','curso'],[['asignatura'],['materia']])
+  const asignatura=pickFuzzy(row,['Nombre_asignatura','asignatura','materia','curso'],[['nombre','asignatura'],['asignatura'],['materia']])
   const modalidad=pickFuzzy(row,['modalidad'],[['modalidad']])
   const bloque=pickFuzzy(row,['bloque'],[['bloque']])
-  const periodo=pickFuzzy(row,['periodo','periodo_academico','periodo_academico_','semestre','periodo_lectivo'],[['periodo']]) || '2026-2'
+  const periodo='2026-2'
 
   const porcentajeRaw=pickFuzzy(row,
-    ['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
+    ['Porcentaje_evaluado','porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
     [['porcentaje','evalu'],['porcentaje']]
   )
   const promedioRaw=pickFuzzy(row,
-    ['promedio_evaluacion','promedio','nota','nota_actual','acumulado'],
+    ['Promedio_evaluacion','promedio_evaluacion','promedio','nota','nota_actual','acumulado'],
     [['promedio','evalu'],['promedio'],['nota','actual'],['acumulado']]
   )
   const perdidoRaw=String(pickFuzzy(row,
-    ['perdio','perdido','en_riesgo','riesgo'],
+    ['Perdió','perdio','perdido','en_riesgo','riesgo'],
     [['perdio'],['perdido'],['riesgo']]
   )).toLowerCase()
 
@@ -131,12 +133,15 @@ function normalizeRecord(row){
     [['promedio','evalu'],['promedio'],['nota','actual'],['acumulado']]
   )
 
+  const corte=pickFuzzy(row,['Corte','corte'],[['corte']])
   const estadoBienestar=pickFuzzy(row,['estado_bienestar','estado_seguimiento','estado'],[['estado','bienestar'],['estado','seguimiento']])
   const observaciones=pickFuzzy(row,['observaciones','observacion','seguimiento'],[['observacion'],['seguimiento']])
   const asesor=pickFuzzy(row,['asesor','asesor_asignado'],[['asesor']])
 
   const virtual=normalize(modalidad).includes('virtual')
+  const bloque1=String(bloque).trim()==='1'
   const bloque2=String(bloque).trim()==='2'
+  const corteNum=Number(corte||0)
 
   // Solo se excluye un registro del bloque activo cuando realmente existen
   // campos de evaluación y ambos están en cero. Si las columnas no fueron
@@ -148,14 +153,16 @@ function normalizeRecord(row){
   let enRiesgo=false
   if(['1','si','sí','true','perdio','perdido','riesgo'].includes(perdidoRaw)) enRiesgo=true
   else if(!sinReporte){
-    if(virtual && porcentaje>=100) enRiesgo=promedio>0 && promedio<3
+    if(virtual && bloque1 && corteNum===1 && porcentaje>0) enRiesgo=promedio>0 && promedio<0.9
+    else if(virtual && bloque1 && corteNum===2 && porcentaje>0) enRiesgo=promedio>0 && promedio<1.2
+    else if(virtual && porcentaje>=100) enRiesgo=promedio>0 && promedio<3
     else if(!virtual && porcentaje>0 && porcentaje<=35) enRiesgo=promedio>0 && promedio<0.9
     else if(promedio>0 && porcentaje>=80) enRiesgo=promedio<3
   }
 
   return {
     ...row, estudiante, documento, programa, snies, docente, asignatura,
-    modalidad, bloque, periodo, porcentaje, promedio, enRiesgo,
+    modalidad, bloque, corte, periodo, porcentaje, promedio, enRiesgo,
     sinReporte, estadoBienestar, observaciones, asesor,
     _porcentajeRaw:porcentajeRaw, _promedioRaw:promedioRaw
   }
@@ -255,8 +262,9 @@ function FilterBar({data,filters,setFilters}){
     {field('programa','Programa',uniq('programa'))}
     {field('modalidad','Modalidad',uniq('modalidad'))}
     {field('bloque','Bloque',uniq('bloque'))}
+    {field('corte','Corte',uniq('corte'))}
     {field('docente','Docente',uniq('docente'))}
-    <button className="ghost" onClick={()=>setFilters({periodo:'',programa:'',modalidad:'',bloque:'',docente:''})}><FilterX size={16}/>Limpiar</button>
+    <button className="ghost" onClick={()=>setFilters({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})}><FilterX size={16}/>Limpiar</button>
   </div>
 }
 
@@ -280,7 +288,7 @@ function Dashboard({profile}){
   const [loading,setLoading]=useState(true)
   const [dataError,setDataError]=useState('')
   const [updated,setUpdated]=useState(null)
-  const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',docente:''})
+  const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
 
   async function loadData(){
     setLoading(true);setDataError('')
@@ -398,13 +406,13 @@ function Dashboard({profile}){
 
       {tab==='fuente'&&<section className="card page-card"><div className="page-title compact"><div><h1>Fuente de datos</h1><p>Estado de sincronización del tablero.</p></div></div>
         <div className="source-grid">
-          <div><span>Fuente</span><b>Google Sheets</b></div><div><span>Estado</span><b className={dataError?'bad':'good'}>{dataError?'Con error':'Conectada'}</b></div>
+          <div><span>Fuente</span><b>Google Sheets · Notas</b></div><div><span>Estado</span><b className={dataError?'bad':'good'}>{dataError?'Con error':'Conectada'}</b></div>
           <div><span>Registros recibidos</span><b>{data.length}</b></div><div><span>Última actualización</span><b>{updated?updated.toLocaleString('es-CO'):'—'}</b></div>
           <div><span>Campos detectados</span><b>{data[0]?Object.keys(data[0]).filter(k=>!k.startsWith('_')).length:0}</b></div><div><span>Periodo detectado</span><b>{[...new Set(data.map(r=>r.periodo).filter(Boolean))].join(', ')||'No identificado'}</b></div>
           <div><span>Porcentaje detectado</span><b>{data.some(r=>r._porcentajeRaw!=='')?'Sí':'No'}</b></div><div><span>Promedio detectado</span><b>{data.some(r=>r._promedioRaw!=='')?'Sí':'No'}</b></div>
         </div>
         <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
-        <p className="muted source-note">La fuente configurada corresponde a la hoja institucional de Alertas Tempranas (gid {SHEET_GID}). Los estudiantes de un bloque virtual aún no evaluado (0% y promedio 0) se excluyen de los reportes de riesgo.</p>
+        <p className="muted source-note">La fuente configurada corresponde a la pestaña "Notas" de la hoja institucional de Alertas Tempranas. Los estudiantes de un bloque virtual aún no evaluado (0% y promedio 0) se excluyen de los reportes de riesgo.</p>
       </section>}
 
       {tab==='usuarios'&&profile?.role==='admin'&&<AdminUsers/>}
