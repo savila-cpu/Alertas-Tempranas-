@@ -10,7 +10,10 @@ import './styles.css'
 
 const SHEET_ID = '1mMGppki5Eh3aYcOOKYPoyvSKA119hMlW'
 const SHEET_GID = '260302609'
-const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
+const SHEET_CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
+]
 
 const normalize = (value='') => String(value)
   .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -64,7 +67,7 @@ function pct(v){
 }
 
 function normalizeRecord(row){
-  const estudiante=pick(row,['estudiante','nombre_estudiante','nombre','estudiante_nombre'])
+  const estudiante=pick(row,['estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'])
   const documento=pick(row,['documento','identificacion','cedula','numero_documento'])
   const programa=pick(row,['nombre_programa','programa','programa_academico'])
   const snies=pick(row,['snies','codigo_snies'])
@@ -72,7 +75,7 @@ function normalizeRecord(row){
   const asignatura=pick(row,['asignatura','materia','curso'])
   const modalidad=pick(row,['modalidad'])
   const bloque=pick(row,['bloque'])
-  const periodo=pick(row,['periodo','periodo_academico'])
+  const periodo=pick(row,['periodo','periodo_academico','periodo_academico_','semestre','periodo_lectivo'])
   const porcentaje=pct(pick(row,['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje']))
   const promedio=num(pick(row,['promedio_evaluacion','promedio','nota','nota_actual','acumulado']))
   const perdidoRaw=String(pick(row,['perdio','perdido','en_riesgo','riesgo'])).toLowerCase()
@@ -218,18 +221,29 @@ function Dashboard({profile}){
   const [loading,setLoading]=useState(true)
   const [dataError,setDataError]=useState('')
   const [updated,setUpdated]=useState(null)
-  const [filters,setFilters]=useState({periodo:'2026-2',programa:'',modalidad:'',bloque:'',docente:''})
+  const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',docente:''})
 
   async function loadData(){
     setLoading(true);setDataError('')
     try{
-      const res=await fetch(SHEET_CSV_URL,{cache:'no-store'})
-      if(!res.ok) throw new Error('No fue posible leer Google Sheets.')
-      const text=await res.text()
-      if(text.trim().startsWith('<!DOCTYPE')||text.includes('<html')) throw new Error('La hoja de Google Sheets no está disponible públicamente.')
-      const parsed=parseCSV(text).map(normalizeRecord)
+      let parsed=[]; let lastError=''
+      for(const url of SHEET_CSV_URLS){
+        try{
+          const res=await fetch(url,{cache:'no-store'})
+          if(!res.ok) throw new Error(`HTTP ${res.status}`)
+          const text=await res.text()
+          if(text.trim().startsWith('<!DOCTYPE')||text.includes('<html')) throw new Error('respuesta HTML')
+          const candidate=parseCSV(text).map(normalizeRecord)
+          if(candidate.length){ parsed=candidate; break }
+          lastError='La hoja respondió, pero no devolvió filas de datos.'
+        }catch(e){ lastError=e.message }
+      }
+      if(!parsed.length) throw new Error(lastError||'No fue posible leer Google Sheets.')
       setData(parsed);setUpdated(new Date())
-    }catch(err){setDataError(err.message)} finally{setLoading(false)}
+    }catch(err){
+      setData([])
+      setDataError(`No se pudieron cargar los datos: ${err.message}`)
+    }finally{setLoading(false)}
   }
   useEffect(()=>{loadData()},[])
   async function logout(){await supabase.auth.signOut()}
@@ -327,6 +341,7 @@ function Dashboard({profile}){
         <div className="source-grid">
           <div><span>Fuente</span><b>Google Sheets</b></div><div><span>Estado</span><b className={dataError?'bad':'good'}>{dataError?'Con error':'Conectada'}</b></div>
           <div><span>Registros recibidos</span><b>{data.length}</b></div><div><span>Última actualización</span><b>{updated?updated.toLocaleString('es-CO'):'—'}</b></div>
+          <div><span>Campos detectados</span><b>{data[0]?Object.keys(data[0]).length:0}</b></div><div><span>Periodo detectado</span><b>{[...new Set(data.map(r=>r.periodo).filter(Boolean))].join(', ')||'No identificado'}</b></div>
         </div>
         <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
         <p className="muted source-note">La fuente configurada corresponde a la hoja institucional de Alertas Tempranas (gid {SHEET_GID}). Los estudiantes de un bloque virtual aún no evaluado (0% y promedio 0) se excluyen de los reportes de riesgo.</p>
