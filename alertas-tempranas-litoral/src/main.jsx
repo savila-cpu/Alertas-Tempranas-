@@ -224,12 +224,12 @@ function ForcePasswordChange({user,onDone}){
 
 function AdminUsers(){
   const [email,setEmail]=useState(''),[name,setName]=useState(''),[role,setRole]=useState('viewer')
-  const [tempPassword,setTempPassword]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false)
+  const [msg,setMsg]=useState(''),[busy,setBusy]=useState(false)
   async function createUser(e){
     e.preventDefault();setMsg('');setBusy(true)
     try{
       const { data, error } = await supabase.functions.invoke('create-user', {
-        body:{ email, name, role, tempPassword }
+        body:{ email, name, role, redirectTo: window.location.origin }
       })
       if(error){
         let detail = error.message || 'No se pudo crear el usuario.'
@@ -243,8 +243,8 @@ function AdminUsers(){
         throw new Error(detail)
       }
       if(data?.error) throw new Error(data.error)
-      setMsg('Usuario creado. En su primer ingreso deberá cambiar la contraseña.')
-      setEmail('');setName('');setTempPassword('');setRole('viewer')
+      setMsg('Invitación enviada por correo. El usuario deberá crear su contraseña al ingresar.')
+      setEmail('');setName('');setRole('viewer')
     }catch(err){
       const message = String(err?.message||err||'Error desconocido')
       setMsg(message.includes('Failed to fetch')
@@ -253,13 +253,13 @@ function AdminUsers(){
     } finally{setBusy(false)}
   }
   return <section className="card page-card">
-    <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios con contraseña temporal y rol de acceso.</p></div><ShieldCheck/></div>
+    <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios y envía una invitación por correo para que definan su contraseña.</p></div><ShieldCheck/></div>
     <form className="grid-form" onSubmit={createUser}>
       <div><label>Nombre</label><input value={name} onChange={e=>setName(e.target.value)} required/></div>
       <div><label>Correo</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></div>
       <div><label>Rol</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></div>
-      <div><label>Contraseña temporal</label><input type="text" value={tempPassword} onChange={e=>setTempPassword(e.target.value)} minLength={8} required/></div>
-      <button className="primary" disabled={busy}>{busy?'Creando…':'Crear usuario'}</button>
+      <div className="invite-note"><label>Acceso</label><p className="muted">El usuario recibirá un correo de invitación y creará su propia contraseña.</p></div>
+      <button className="primary" disabled={busy}>{busy?'Enviando…':'Crear usuario y enviar invitación'}</button>
     </form>
     {msg&&<p className="notice">{msg}</p>}
   </section>
