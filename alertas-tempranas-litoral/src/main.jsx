@@ -53,6 +53,27 @@ function pick(obj, aliases){
   return ''
 }
 
+function pickFuzzy(obj, aliases, tokenGroups=[]){
+  const exact=pick(obj,aliases)
+  if(exact!=='') return exact
+  const entries=Object.entries(obj||{})
+  for(const tokens of tokenGroups){
+    const found=entries.find(([k,v])=>{
+      if(v===undefined || v===null || String(v).trim()==='') return false
+      const nk=normalize(k)
+      return tokens.every(t=>nk.includes(normalize(t)))
+    })
+    if(found) return found[1]
+  }
+  return ''
+}
+
+function hasFuzzyField(obj, aliases, tokenGroups=[]){
+  const keys=Object.keys(obj||{}).map(normalize)
+  if(aliases.some(a=>keys.includes(normalize(a)))) return true
+  return tokenGroups.some(tokens=>keys.some(k=>tokens.every(t=>k.includes(normalize(t)))))
+}
+
 function num(v){
   if(v===null || v===undefined || v==='') return 0
   const raw=String(v).replace(/%/g,'').replace(/\./g, m=>m).replace(',','.')
@@ -67,25 +88,62 @@ function pct(v){
 }
 
 function normalizeRecord(row){
-  const estudiante=pick(row,['estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'])
-  const documento=pick(row,['documento','identificacion','cedula','numero_documento'])
-  const programa=pick(row,['nombre_programa','programa','programa_academico'])
-  const snies=pick(row,['snies','codigo_snies'])
-  const docente=pick(row,['docente','nombre_docente','profesor'])
-  const asignatura=pick(row,['asignatura','materia','curso'])
-  const modalidad=pick(row,['modalidad'])
-  const bloque=pick(row,['bloque'])
-  const periodo=pick(row,['periodo','periodo_academico','periodo_academico_','semestre','periodo_lectivo']) || '2026-2'
-  const porcentaje=pct(pick(row,['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje']))
-  const promedio=num(pick(row,['promedio_evaluacion','promedio','nota','nota_actual','acumulado']))
-  const perdidoRaw=String(pick(row,['perdio','perdido','en_riesgo','riesgo'])).toLowerCase()
-  const estadoBienestar=pick(row,['estado_bienestar','estado_seguimiento','estado'])
-  const observaciones=pick(row,['observaciones','observacion','seguimiento'])
-  const asesor=pick(row,['asesor','asesor_asignado'])
+  const estudiante=pickFuzzy(row,
+    ['estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'],
+    [['nombre','estudiante'],['estudiante']]
+  )
+  const documento=pickFuzzy(row,
+    ['documento','identificacion','cedula','numero_documento'],
+    [['documento'],['identificacion'],['cedula']]
+  )
+  const programa=pickFuzzy(row,
+    ['nombre_programa','programa','programa_academico'],
+    [['nombre','programa'],['programa']]
+  )
+  const snies=pickFuzzy(row,['snies','codigo_snies'],[['snies']])
+  const docente=pickFuzzy(row,['docente','nombre_docente','profesor'],[['nombre','docente'],['docente'],['profesor']])
+  const asignatura=pickFuzzy(row,['asignatura','materia','curso'],[['asignatura'],['materia']])
+  const modalidad=pickFuzzy(row,['modalidad'],[['modalidad']])
+  const bloque=pickFuzzy(row,['bloque'],[['bloque']])
+  const periodo=pickFuzzy(row,['periodo','periodo_academico','periodo_academico_','semestre','periodo_lectivo'],[['periodo']]) || '2026-2'
+
+  const porcentajeRaw=pickFuzzy(row,
+    ['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
+    [['porcentaje','evalu'],['porcentaje']]
+  )
+  const promedioRaw=pickFuzzy(row,
+    ['promedio_evaluacion','promedio','nota','nota_actual','acumulado'],
+    [['promedio','evalu'],['promedio'],['nota','actual'],['acumulado']]
+  )
+  const perdidoRaw=String(pickFuzzy(row,
+    ['perdio','perdido','en_riesgo','riesgo'],
+    [['perdio'],['perdido'],['riesgo']]
+  )).toLowerCase()
+
+  const porcentaje=pct(porcentajeRaw)
+  const promedio=num(promedioRaw)
+  const tieneCampoPorcentaje=hasFuzzyField(row,
+    ['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
+    [['porcentaje','evalu'],['porcentaje']]
+  )
+  const tieneCampoPromedio=hasFuzzyField(row,
+    ['promedio_evaluacion','promedio','nota','nota_actual','acumulado'],
+    [['promedio','evalu'],['promedio'],['nota','actual'],['acumulado']]
+  )
+
+  const estadoBienestar=pickFuzzy(row,['estado_bienestar','estado_seguimiento','estado'],[['estado','bienestar'],['estado','seguimiento']])
+  const observaciones=pickFuzzy(row,['observaciones','observacion','seguimiento'],[['observacion'],['seguimiento']])
+  const asesor=pickFuzzy(row,['asesor','asesor_asignado'],[['asesor']])
 
   const virtual=normalize(modalidad).includes('virtual')
   const bloque2=String(bloque).trim()==='2'
-  const sinReporte=virtual && bloque2 && porcentaje===0 && promedio===0
+
+  // Solo se excluye un registro del bloque activo cuando realmente existen
+  // campos de evaluación y ambos están en cero. Si las columnas no fueron
+  // reconocidas, el registro permanece visible para evitar vaciar el tablero.
+  const sinReporte=virtual && bloque2 &&
+    tieneCampoPorcentaje && tieneCampoPromedio &&
+    porcentaje===0 && promedio===0
 
   let enRiesgo=false
   if(['1','si','sí','true','perdio','perdido','riesgo'].includes(perdidoRaw)) enRiesgo=true
@@ -98,7 +156,8 @@ function normalizeRecord(row){
   return {
     ...row, estudiante, documento, programa, snies, docente, asignatura,
     modalidad, bloque, periodo, porcentaje, promedio, enRiesgo,
-    sinReporte, estadoBienestar, observaciones, asesor
+    sinReporte, estadoBienestar, observaciones, asesor,
+    _porcentajeRaw:porcentajeRaw, _promedioRaw:promedioRaw
   }
 }
 
@@ -341,7 +400,8 @@ function Dashboard({profile}){
         <div className="source-grid">
           <div><span>Fuente</span><b>Google Sheets</b></div><div><span>Estado</span><b className={dataError?'bad':'good'}>{dataError?'Con error':'Conectada'}</b></div>
           <div><span>Registros recibidos</span><b>{data.length}</b></div><div><span>Última actualización</span><b>{updated?updated.toLocaleString('es-CO'):'—'}</b></div>
-          <div><span>Campos detectados</span><b>{data[0]?Object.keys(data[0]).length:0}</b></div><div><span>Periodo detectado</span><b>{[...new Set(data.map(r=>r.periodo).filter(Boolean))].join(', ')||'No identificado'}</b></div>
+          <div><span>Campos detectados</span><b>{data[0]?Object.keys(data[0]).filter(k=>!k.startsWith('_')).length:0}</b></div><div><span>Periodo detectado</span><b>{[...new Set(data.map(r=>r.periodo).filter(Boolean))].join(', ')||'No identificado'}</b></div>
+          <div><span>Porcentaje detectado</span><b>{data.some(r=>r._porcentajeRaw!=='')?'Sí':'No'}</b></div><div><span>Promedio detectado</span><b>{data.some(r=>r._promedioRaw!=='')?'Sí':'No'}</b></div>
         </div>
         <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
         <p className="muted source-note">La fuente configurada corresponde a la hoja institucional de Alertas Tempranas (gid {SHEET_GID}). Los estudiantes de un bloque virtual aún no evaluado (0% y promedio 0) se excluyen de los reportes de riesgo.</p>
