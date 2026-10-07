@@ -1,160 +1,356 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LogOut, Users, LayoutDashboard, ShieldCheck } from 'lucide-react'
+import {
+  LogOut, Users, LayoutDashboard, ShieldCheck, GraduationCap,
+  BookOpen, HeartHandshake, Database, RefreshCw, FilterX,
+  AlertTriangle, FileDown, Search, UserRound, ChevronDown
+} from 'lucide-react'
 import { supabase } from './supabase'
 import './styles.css'
 
-function Login({ onLogin }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+const SHEET_ID = '1mMGppki5Eh3aYcOOKYPoyvSKA119hMlW'
+const SHEET_GID = '260302609'
+const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
 
-  async function submit(e) {
-    e.preventDefault(); setBusy(true); setError('')
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    setBusy(false)
-    if (error) return setError('Correo o contraseña incorrectos.')
-    onLogin(data.session)
+const normalize = (value='') => String(value)
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')
+
+function parseCSV(text){
+  const rows=[]; let row=[]; let cell=''; let quoted=false
+  for(let i=0;i<text.length;i++){
+    const c=text[i], n=text[i+1]
+    if(c==='"' && quoted && n==='"'){ cell+='"'; i++; continue }
+    if(c==='"'){ quoted=!quoted; continue }
+    if(c===',' && !quoted){ row.push(cell); cell=''; continue }
+    if((c==='\n' || c==='\r') && !quoted){
+      if(c==='\r' && n==='\n') i++
+      row.push(cell); cell=''
+      if(row.some(v=>String(v).trim()!=='')) rows.push(row)
+      row=[]
+      continue
+    }
+    cell+=c
+  }
+  if(cell || row.length){ row.push(cell); rows.push(row) }
+  if(rows.length<2) return []
+  const headers=rows[0].map((h,i)=> normalize(h) || `col_${i}`)
+  return rows.slice(1).map(r=>{
+    const o={}
+    headers.forEach((h,i)=>o[h]=(r[i]??'').trim())
+    return o
+  })
+}
+
+function pick(obj, aliases){
+  for(const a of aliases){
+    const k=normalize(a)
+    if(obj?.[k]!==undefined && obj[k]!=='') return obj[k]
+  }
+  return ''
+}
+
+function num(v){
+  if(v===null || v===undefined || v==='') return 0
+  const raw=String(v).replace(/%/g,'').replace(/\./g, m=>m).replace(',','.')
+  const n=parseFloat(raw)
+  return Number.isFinite(n)?n:0
+}
+
+function pct(v){
+  const n=num(v)
+  if(String(v).includes('%')) return n
+  return n<=1 ? n*100 : n
+}
+
+function normalizeRecord(row){
+  const estudiante=pick(row,['estudiante','nombre_estudiante','nombre','estudiante_nombre'])
+  const documento=pick(row,['documento','identificacion','cedula','numero_documento'])
+  const programa=pick(row,['nombre_programa','programa','programa_academico'])
+  const snies=pick(row,['snies','codigo_snies'])
+  const docente=pick(row,['docente','nombre_docente','profesor'])
+  const asignatura=pick(row,['asignatura','materia','curso'])
+  const modalidad=pick(row,['modalidad'])
+  const bloque=pick(row,['bloque'])
+  const periodo=pick(row,['periodo','periodo_academico'])
+  const porcentaje=pct(pick(row,['porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje']))
+  const promedio=num(pick(row,['promedio_evaluacion','promedio','nota','nota_actual','acumulado']))
+  const perdidoRaw=String(pick(row,['perdio','perdido','en_riesgo','riesgo'])).toLowerCase()
+  const estadoBienestar=pick(row,['estado_bienestar','estado_seguimiento','estado'])
+  const observaciones=pick(row,['observaciones','observacion','seguimiento'])
+  const asesor=pick(row,['asesor','asesor_asignado'])
+
+  const virtual=normalize(modalidad).includes('virtual')
+  const bloque2=String(bloque).trim()==='2'
+  const sinReporte=virtual && bloque2 && porcentaje===0 && promedio===0
+
+  let enRiesgo=false
+  if(['1','si','sí','true','perdio','perdido','riesgo'].includes(perdidoRaw)) enRiesgo=true
+  else if(!sinReporte){
+    if(virtual && porcentaje>=100) enRiesgo=promedio>0 && promedio<3
+    else if(!virtual && porcentaje>0 && porcentaje<=35) enRiesgo=promedio>0 && promedio<0.9
+    else if(promedio>0 && porcentaje>=80) enRiesgo=promedio<3
   }
 
+  return {
+    ...row, estudiante, documento, programa, snies, docente, asignatura,
+    modalidad, bloque, periodo, porcentaje, promedio, enRiesgo,
+    sinReporte, estadoBienestar, observaciones, asesor
+  }
+}
+
+function Login({ onLogin }) {
+  const [email,setEmail]=useState('')
+  const [password,setPassword]=useState('')
+  const [error,setError]=useState('')
+  const [busy,setBusy]=useState(false)
+  async function submit(e){
+    e.preventDefault(); setBusy(true); setError('')
+    const {data,error}=await supabase.auth.signInWithPassword({email,password})
+    setBusy(false)
+    if(error) return setError('Correo o contraseña incorrectos.')
+    onLogin(data.session)
+  }
   return <div className="auth-shell">
     <form className="card login-card" onSubmit={submit}>
+      <div className="brand-badge">L</div>
       <h1>Alertas Tempranas</h1>
       <p className="muted">Corporación de Educación Superior del Litoral</p>
       <label>Correo institucional</label>
-      <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required />
+      <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/>
       <label>Contraseña</label>
-      <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
-      {error && <p className="error">{error}</p>}
-      <button disabled={busy}>{busy ? 'Ingresando…' : 'Ingresar'}</button>
+      <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
+      {error&&<p className="error">{error}</p>}
+      <button className="primary" disabled={busy}>{busy?'Ingresando…':'Ingresar'}</button>
     </form>
   </div>
 }
 
-function ForcePasswordChange({ user, onDone }) {
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-
+function ForcePasswordChange({user,onDone}){
+  const [password,setPassword]=useState('')
+  const [confirm,setConfirm]=useState('')
+  const [error,setError]=useState('')
+  const [busy,setBusy]=useState(false)
   async function submit(e){
     e.preventDefault(); setError('')
-    if(password.length < 8) return setError('La contraseña debe tener mínimo 8 caracteres.')
-    if(password !== confirm) return setError('Las contraseñas no coinciden.')
+    if(password.length<8) return setError('La contraseña debe tener mínimo 8 caracteres.')
+    if(password!==confirm) return setError('Las contraseñas no coinciden.')
     setBusy(true)
-    const { error: updateError } = await supabase.auth.updateUser({ password })
-    if(updateError){ setBusy(false); return setError(updateError.message) }
-    const { error: profileError } = await supabase.from('profiles').update({ must_change_password:false }).eq('id', user.id)
+    const {error:updateError}=await supabase.auth.updateUser({password})
+    if(updateError){setBusy(false);return setError(updateError.message)}
+    const {error:profileError}=await supabase.from('profiles').update({must_change_password:false}).eq('id',user.id)
     setBusy(false)
     if(profileError) return setError(profileError.message)
     onDone()
   }
-
-  return <div className="auth-shell">
-    <form className="card login-card" onSubmit={submit}>
-      <ShieldCheck size={36}/>
-      <h2>Crea tu contraseña</h2>
-      <p className="muted">Por seguridad debes reemplazar la contraseña temporal antes de continuar.</p>
-      <label>Nueva contraseña</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
-      <label>Confirmar contraseña</label><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} required />
-      {error && <p className="error">{error}</p>}
-      <button disabled={busy}>{busy ? 'Guardando…' : 'Guardar y continuar'}</button>
-    </form>
-  </div>
+  return <div className="auth-shell"><form className="card login-card" onSubmit={submit}>
+    <ShieldCheck size={38}/><h2>Crea tu contraseña</h2>
+    <p className="muted">Debes reemplazar la contraseña temporal antes de continuar.</p>
+    <label>Nueva contraseña</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
+    <label>Confirmar contraseña</label><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} required/>
+    {error&&<p className="error">{error}</p>}
+    <button className="primary" disabled={busy}>{busy?'Guardando…':'Guardar y continuar'}</button>
+  </form></div>
 }
 
 function AdminUsers(){
-  const [email,setEmail]=useState('')
-  const [name,setName]=useState('')
-  const [role,setRole]=useState('viewer')
-  const [tempPassword,setTempPassword]=useState('')
-  const [msg,setMsg]=useState('')
-  const [busy,setBusy]=useState(false)
-
+  const [email,setEmail]=useState(''),[name,setName]=useState(''),[role,setRole]=useState('viewer')
+  const [tempPassword,setTempPassword]=useState(''),[msg,setMsg]=useState(''),[busy,setBusy]=useState(false)
   async function createUser(e){
-    e.preventDefault(); setMsg(''); setBusy(true)
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData.session?.access_token
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-      body:JSON.stringify({ email, name, role, tempPassword })
-    })
-    const body = await response.json().catch(()=>({}))
-    setBusy(false)
-    if(!response.ok) return setMsg(body.error || 'No se pudo crear el usuario.')
-    setMsg('Usuario creado. En su primer ingreso deberá cambiar la contraseña.')
-    setEmail(''); setName(''); setTempPassword(''); setRole('viewer')
+    e.preventDefault();setMsg('');setBusy(true)
+    try{
+      const {data:sessionData}=await supabase.auth.getSession()
+      const token=sessionData.session?.access_token
+      const response=await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,{
+        method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+        body:JSON.stringify({email,name,role,tempPassword})
+      })
+      const body=await response.json().catch(()=>({}))
+      if(!response.ok) throw new Error(body.error||'No se pudo crear el usuario.')
+      setMsg('Usuario creado. En el primer ingreso deberá cambiar la contraseña.')
+      setEmail('');setName('');setTempPassword('');setRole('viewer')
+    }catch(err){setMsg(err.message)} finally{setBusy(false)}
   }
-
-  return <section className="card">
-    <h2>Administración de usuarios</h2>
-    <p className="muted">Crea usuarios con una contraseña temporal. El sistema obligará a cambiarla en el primer ingreso.</p>
+  return <section className="card page-card">
+    <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios con contraseña temporal y rol de acceso.</p></div><ShieldCheck/></div>
     <form className="grid-form" onSubmit={createUser}>
-      <div><label>Nombre</label><input value={name} onChange={e=>setName(e.target.value)} required /></div>
-      <div><label>Correo</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required /></div>
+      <div><label>Nombre</label><input value={name} onChange={e=>setName(e.target.value)} required/></div>
+      <div><label>Correo</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></div>
       <div><label>Rol</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></div>
-      <div><label>Contraseña temporal</label><input type="text" value={tempPassword} onChange={e=>setTempPassword(e.target.value)} minLength={8} required /></div>
-      <button disabled={busy}>{busy?'Creando…':'Crear usuario'}</button>
+      <div><label>Contraseña temporal</label><input type="text" value={tempPassword} onChange={e=>setTempPassword(e.target.value)} minLength={8} required/></div>
+      <button className="primary" disabled={busy}>{busy?'Creando…':'Crear usuario'}</button>
     </form>
-    {msg && <p className="notice">{msg}</p>}
+    {msg&&<p className="notice">{msg}</p>}
   </section>
 }
 
-function Dashboard({ profile }){
+function FilterBar({data,filters,setFilters}){
+  const uniq=k=>[...new Set(data.map(x=>x[k]).filter(Boolean))].sort((a,b)=>a.localeCompare(b))
+  const field=(k,label,items)=> <label className="filter-field">{label}<div className="select-wrap"><select value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})}><option value="">Todos</option>{items.map(v=><option key={v}>{v}</option>)}</select><ChevronDown size={15}/></div></label>
+  return <div className="filters card">
+    <div className="filter-title"><Search size={17}/><b>Filtros</b></div>
+    {field('periodo','Periodo',uniq('periodo').filter(x=>['2026-1','2026-2'].includes(x)||!/^2025/.test(x)))}
+    {field('programa','Programa',uniq('programa'))}
+    {field('modalidad','Modalidad',uniq('modalidad'))}
+    {field('bloque','Bloque',uniq('bloque'))}
+    {field('docente','Docente',uniq('docente'))}
+    <button className="ghost" onClick={()=>setFilters({periodo:'',programa:'',modalidad:'',bloque:'',docente:''})}><FilterX size={16}/>Limpiar</button>
+  </div>
+}
+
+const groupRows=(data,key)=>Object.values(data.reduce((acc,r)=>{
+  const name=r[key]||'Sin información'
+  acc[name]??={name,total:0,risk:0,students:new Set()}
+  acc[name].total++; if(r.enRiesgo) acc[name].risk++
+  acc[name].students.add(r.documento||r.estudiante||Math.random())
+  return acc
+},{})).map(x=>({...x,students:x.students.size,pct:x.total?Math.round(x.risk/x.total*100):0})).sort((a,b)=>b.pct-a.pct)
+
+function SimpleTable({columns,rows,empty='No hay información para mostrar.'}){
+  return <div className="table-wrap"><table><thead><tr>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead><tbody>
+    {rows.length===0?<tr><td colSpan={columns.length} className="empty">{empty}</td></tr>:rows.map((r,i)=><tr key={i}>{columns.map(c=><td key={c.key}>{c.render?c.render(r):r[c.key]}</td>)}</tr>)}
+  </tbody></table></div>
+}
+
+function Dashboard({profile}){
   const [tab,setTab]=useState('inicio')
-  async function logout(){ await supabase.auth.signOut() }
+  const [data,setData]=useState([])
+  const [loading,setLoading]=useState(true)
+  const [dataError,setDataError]=useState('')
+  const [updated,setUpdated]=useState(null)
+  const [filters,setFilters]=useState({periodo:'2026-2',programa:'',modalidad:'',bloque:'',docente:''})
+
+  async function loadData(){
+    setLoading(true);setDataError('')
+    try{
+      const res=await fetch(SHEET_CSV_URL,{cache:'no-store'})
+      if(!res.ok) throw new Error('No fue posible leer Google Sheets.')
+      const text=await res.text()
+      if(text.trim().startsWith('<!DOCTYPE')||text.includes('<html')) throw new Error('La hoja de Google Sheets no está disponible públicamente.')
+      const parsed=parseCSV(text).map(normalizeRecord)
+      setData(parsed);setUpdated(new Date())
+    }catch(err){setDataError(err.message)} finally{setLoading(false)}
+  }
+  useEffect(()=>{loadData()},[])
+  async function logout(){await supabase.auth.signOut()}
+
+  const filtered=useMemo(()=>data.filter(r=>Object.entries(filters).every(([k,v])=>!v||String(r[k])===v)),[data,filters])
+  const reportable=filtered.filter(r=>!r.sinReporte)
+  const uniqueStudents=new Set(reportable.map(r=>r.documento||r.estudiante).filter(Boolean))
+  const riskStudents=new Set(reportable.filter(r=>r.enRiesgo).map(r=>r.documento||r.estudiante).filter(Boolean))
+  const programs=new Set(reportable.map(r=>r.programa).filter(Boolean))
+  const programRows=groupRows(reportable,'programa')
+  const teacherRows=groupRows(reportable,'docente')
+  const subjectRows=groupRows(reportable,'asignatura')
+  const riskRows=reportable.filter(r=>r.enRiesgo)
+
+  const bienestarRows=Object.values(riskRows.reduce((acc,r)=>{
+    const key=r.documento||r.estudiante||`${r.programa}-${r.asignatura}`
+    if(!acc[key]) acc[key]={...r,subjects:new Set(),teachers:new Set()}
+    if(r.asignatura) acc[key].subjects.add(r.asignatura)
+    if(r.docente) acc[key].teachers.add(r.docente)
+    return acc
+  },{})).map(r=>({...r,asignaturas:[...r.subjects].join(', '),docentes:[...r.teachers].join(', ')}))
+
+  function downloadBienestar(){
+    const headers=['Estudiante','Documento','Programa','Modalidad','Asignaturas','Estado bienestar','Observaciones']
+    const lines=[headers,...bienestarRows.map(r=>[r.estudiante,r.documento,r.programa,r.modalidad,r.asignaturas,r.estadoBienestar,r.observaciones])]
+    const csv=lines.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'})
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seguimiento-bienestar.csv';a.click();URL.revokeObjectURL(a.href)
+  }
+
+  const menu=[
+    ['inicio','Inicio',LayoutDashboard],
+    ['programas','Programas',GraduationCap],
+    ['docentes','Docentes',UserRound],
+    ['asignaturas','Asignaturas',BookOpen],
+    ['bienestar','Bienestar',HeartHandshake],
+    ['fuente','Fuente de datos',Database]
+  ]
+  if(profile?.role==='admin') menu.push(['usuarios','Usuarios',Users])
+
   return <div className="app-shell">
     <aside>
-      <div><h2>La Litoral</h2><p>Alertas Tempranas</p></div>
-      <nav>
-        <button className={tab==='inicio'?'active':''} onClick={()=>setTab('inicio')}><LayoutDashboard size={18}/>Inicio</button>
-        {profile?.role==='admin' && <button className={tab==='usuarios'?'active':''} onClick={()=>setTab('usuarios')}><Users size={18}/>Usuarios</button>}
-      </nav>
+      <div className="brand"><div className="brand-mark">L</div><div><h2>La Litoral</h2><p>Alertas Tempranas</p></div></div>
+      <nav>{menu.map(([id,label,Icon])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}><Icon size={18}/>{label}</button>)}</nav>
+      <div className="aside-user"><span>{profile?.full_name||profile?.email||'Usuario'}</span><small>{profile?.role||'consulta'}</small></div>
       <button className="logout" onClick={logout}><LogOut size={18}/>Cerrar sesión</button>
     </aside>
+
     <main>
-      {tab==='inicio' && <>
-        <h1>Panel de Alertas Tempranas</h1>
+      {tab!=='usuarios'&&<FilterBar data={data} filters={filters} setFilters={setFilters}/>}
+      {loading&&<div className="banner info">Actualizando información desde Google Sheets…</div>}
+      {dataError&&<div className="banner danger"><AlertTriangle size={18}/><span>{dataError} Verifica que la hoja permita acceso mediante enlace.</span><button onClick={loadData}>Reintentar</button></div>}
+
+      {tab==='inicio'&&<>
+        <div className="page-title"><div><h1>Panel de Alertas Tempranas</h1><p>Seguimiento académico · Periodo {filters.periodo||'Todos'}</p></div><button className="refresh" onClick={loadData}><RefreshCw size={17}/>Actualizar</button></div>
         <div className="stats">
-          <div className="card stat"><span>Estudiantes</span><strong>—</strong></div>
-          <div className="card stat"><span>En riesgo</span><strong>—</strong></div>
-          <div className="card stat"><span>Programas</span><strong>—</strong></div>
+          <div className="card stat"><span>Estudiantes</span><strong>{uniqueStudents.size}</strong><small>con información reportable</small></div>
+          <div className="card stat risk"><span>En riesgo</span><strong>{riskStudents.size}</strong><small>{uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0}% de estudiantes</small></div>
+          <div className="card stat"><span>Programas</span><strong>{programs.size}</strong><small>en el filtro actual</small></div>
+          <div className="card stat"><span>Registros</span><strong>{reportable.length}</strong><small>{filtered.length-reportable.length} sin reporte por bloque</small></div>
         </div>
-        <section className="card"><h2>Conexión de datos</h2><p className="muted">Aquí puedes integrar la hoja de Google Sheets o la fuente de datos que ya usabas en tu tablero.</p></section>
+        <div className="two-col">
+          <section className="card page-card"><div className="section-head"><div><h2>Programas con mayor alerta</h2><p className="muted">Porcentaje de registros clasificados en riesgo.</p></div></div>
+            <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'risk',label:'Alertas'},{key:'pct',label:'% pérdida',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={programRows.slice(0,8)}/>
+          </section>
+          <section className="card page-card"><div className="section-head"><div><h2>Estudiantes en riesgo</h2><p className="muted">Vista rápida del seguimiento prioritario.</p></div></div>
+            <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignatura',label:'Asignatura'},{key:'promedio',label:'Nota / acumulado'}]} rows={riskRows.slice(0,8)}/>
+          </section>
+        </div>
       </>}
-      {tab==='usuarios' && profile?.role==='admin' && <AdminUsers/>}
+
+      {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado por programa académico.</p></div></div>
+        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros evaluados'},{key:'risk',label:'Registros en riesgo'},{key:'pct',label:'% pérdida',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
+      </section>}
+
+      {tab==='docentes'&&<section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Total de estudiantes atendidos y relación de pérdida.</p></div></div>
+        <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Total estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'En riesgo'},{key:'pct',label:'% pérdida',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={teacherRows}/>
+      </section>}
+
+      {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Asignaturas consolidadas según el nombre reportado en la fuente.</p></div></div>
+        <SimpleTable columns={[{key:'name',label:'Asignatura'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'En riesgo'},{key:'pct',label:'% pérdida'}]} rows={subjectRows}/>
+      </section>}
+
+      {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Estudiantes identificados con alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
+        <div className="status-cards">
+          {['Sin seguimiento','Contactado','No contactado','No interesado','Interesado en plan de mejoramiento'].map(s=>{
+            const n=bienestarRows.filter(r=>(r.estadoBienestar||'Sin seguimiento')===s).length
+            return <div className="mini-card" key={s}><b>{n}</b><span>{s}</span></div>
+          })}
+        </div>
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'}]} rows={bienestarRows}/>
+      </section>}
+
+      {tab==='fuente'&&<section className="card page-card"><div className="page-title compact"><div><h1>Fuente de datos</h1><p>Estado de sincronización del tablero.</p></div></div>
+        <div className="source-grid">
+          <div><span>Fuente</span><b>Google Sheets</b></div><div><span>Estado</span><b className={dataError?'bad':'good'}>{dataError?'Con error':'Conectada'}</b></div>
+          <div><span>Registros recibidos</span><b>{data.length}</b></div><div><span>Última actualización</span><b>{updated?updated.toLocaleString('es-CO'):'—'}</b></div>
+        </div>
+        <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
+        <p className="muted source-note">La fuente configurada corresponde a la hoja institucional de Alertas Tempranas (gid {SHEET_GID}). Los estudiantes de un bloque virtual aún no evaluado (0% y promedio 0) se excluyen de los reportes de riesgo.</p>
+      </section>}
+
+      {tab==='usuarios'&&profile?.role==='admin'&&<AdminUsers/>}
     </main>
   </div>
 }
 
 function App(){
-  const [session,setSession]=useState(null)
-  const [profile,setProfile]=useState(null)
-  const [loading,setLoading]=useState(true)
-
+  const [session,setSession]=useState(null),[profile,setProfile]=useState(null),[loading,setLoading]=useState(true)
   async function loadProfile(user){
-    const { data } = await supabase.from('profiles').select('*').eq('id',user.id).single()
+    const {data}=await supabase.from('profiles').select('*').eq('id',user.id).single()
     setProfile(data)
   }
-
   useEffect(()=>{
-    supabase.auth.getSession().then(async ({data})=>{
-      setSession(data.session)
-      if(data.session?.user) await loadProfile(data.session.user)
-      setLoading(false)
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next)=>{
-      setSession(next)
-      if(next?.user) await loadProfile(next.user); else setProfile(null)
-    })
-    return ()=>sub.subscription.unsubscribe()
+    supabase.auth.getSession().then(async({data})=>{setSession(data.session);if(data.session?.user)await loadProfile(data.session.user);setLoading(false)})
+    const {data:sub}=supabase.auth.onAuthStateChange(async(_event,next)=>{setSession(next);if(next?.user)await loadProfile(next.user);else setProfile(null)})
+    return()=>sub.subscription.unsubscribe()
   },[])
-
-  if(loading) return <div className="center">Cargando…</div>
-  if(!session) return <Login onLogin={setSession}/>
-  if(profile?.must_change_password) return <ForcePasswordChange user={session.user} onDone={()=>loadProfile(session.user)} />
+  if(loading)return <div className="center">Cargando…</div>
+  if(!session)return <Login onLogin={setSession}/>
+  if(profile?.must_change_password)return <ForcePasswordChange user={session.user} onDone={()=>loadProfile(session.user)}/>
   return <Dashboard profile={profile}/>
 }
 
