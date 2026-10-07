@@ -228,17 +228,29 @@ function AdminUsers(){
   async function createUser(e){
     e.preventDefault();setMsg('');setBusy(true)
     try{
-      const {data:sessionData}=await supabase.auth.getSession()
-      const token=sessionData.session?.access_token
-      const response=await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,{
-        method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-        body:JSON.stringify({email,name,role,tempPassword})
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body:{ email, name, role, tempPassword }
       })
-      const body=await response.json().catch(()=>({}))
-      if(!response.ok) throw new Error(body.error||'No se pudo crear el usuario.')
-      setMsg('Usuario creado. En el primer ingreso deberá cambiar la contraseña.')
+      if(error){
+        let detail = error.message || 'No se pudo crear el usuario.'
+        try{
+          const ctx = error.context
+          if(ctx?.json){
+            const body = await ctx.json()
+            detail = body?.error || detail
+          }
+        }catch{}
+        throw new Error(detail)
+      }
+      if(data?.error) throw new Error(data.error)
+      setMsg('Usuario creado. En su primer ingreso deberá cambiar la contraseña.')
       setEmail('');setName('');setTempPassword('');setRole('viewer')
-    }catch(err){setMsg(err.message)} finally{setBusy(false)}
+    }catch(err){
+      const message = String(err?.message||err||'Error desconocido')
+      setMsg(message.includes('Failed to fetch')
+        ? 'No se pudo conectar con la función create-user de Supabase. Verifica que la Edge Function esté desplegada en este proyecto.'
+        : message)
+    } finally{setBusy(false)}
   }
   return <section className="card page-card">
     <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios con contraseña temporal y rol de acceso.</p></div><ShieldCheck/></div>
