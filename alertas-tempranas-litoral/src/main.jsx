@@ -224,45 +224,77 @@ function ForcePasswordChange({user,onDone}){
 
 function AdminUsers(){
   const [email,setEmail]=useState(''),[name,setName]=useState(''),[role,setRole]=useState('viewer')
-  const [msg,setMsg]=useState(''),[busy,setBusy]=useState(false)
+  const [msg,setMsg]=useState(''),[busy,setBusy]=useState(false),[users,setUsers]=useState([]),[loading,setLoading]=useState(true),[actionBusy,setActionBusy]=useState('')
+
+  async function callAdmin(body){
+    const {data,error}=await supabase.functions.invoke('create-user',{body})
+    if(error) throw new Error(error.message||'No se pudo completar la operación.')
+    if(data?.error) throw new Error(data.error)
+    return data
+  }
+  async function loadUsers(){
+    setLoading(true)
+    try{const data=await callAdmin({action:'list'});setUsers(data?.users||[])}
+    catch(err){setMsg(String(err?.message||err))}
+    finally{setLoading(false)}
+  }
+  useEffect(()=>{loadUsers()},[])
+
   async function createUser(e){
     e.preventDefault();setMsg('');setBusy(true)
     try{
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body:{ email, name, role, redirectTo: window.location.origin }
-      })
-      if(error){
-        let detail = error.message || 'No se pudo crear el usuario.'
-        try{
-          const ctx = error.context
-          if(ctx?.json){
-            const body = await ctx.json()
-            detail = body?.error || detail
-          }
-        }catch{}
-        throw new Error(detail)
-      }
-      if(data?.error) throw new Error(data.error)
+      await callAdmin({action:'create',email,name,role,redirectTo:window.location.origin})
       setMsg('Invitación enviada por correo. El usuario deberá crear su contraseña al ingresar.')
-      setEmail('');setName('');setRole('viewer')
-    }catch(err){
-      const message = String(err?.message||err||'Error desconocido')
-      setMsg(message.includes('Failed to fetch')
-        ? 'No se pudo conectar con la función create-user de Supabase. Verifica que la Edge Function esté desplegada en este proyecto.'
-        : message)
-    } finally{setBusy(false)}
+      setEmail('');setName('');setRole('viewer');await loadUsers()
+    }catch(err){setMsg(String(err?.message||err))}
+    finally{setBusy(false)}
   }
-  return <section className="card page-card">
-    <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios y envía una invitación por correo para que definan su contraseña.</p></div><ShieldCheck/></div>
-    <form className="grid-form" onSubmit={createUser}>
-      <div><label>Nombre</label><input value={name} onChange={e=>setName(e.target.value)} required/></div>
-      <div><label>Correo</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></div>
-      <div><label>Rol</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></div>
-      <div className="invite-note"><label>Acceso</label><p className="muted">El usuario recibirá un correo de invitación y creará su propia contraseña.</p></div>
-      <button className="primary" disabled={busy}>{busy?'Enviando…':'Crear usuario y enviar invitación'}</button>
-    </form>
-    {msg&&<p className="notice">{msg}</p>}
-  </section>
+  async function changeRole(userId,nextRole){
+    setActionBusy(userId+'role');setMsg('')
+    try{await callAdmin({action:'update_role',userId,role:nextRole});setUsers(x=>x.map(u=>u.id===userId?{...u,role:nextRole}:u));setMsg('Rol actualizado correctamente.')}
+    catch(err){setMsg(String(err?.message||err))}
+    finally{setActionBusy('')}
+  }
+  async function toggleAccess(u){
+    setActionBusy(u.id+'access');setMsg('')
+    try{await callAdmin({action:'set_access',userId:u.id,disabled:!u.disabled});setUsers(x=>x.map(v=>v.id===u.id?{...v,disabled:!v.disabled}:v));setMsg(u.disabled?'Acceso reactivado correctamente.':'Acceso desactivado correctamente.')}
+    catch(err){setMsg(String(err?.message||err))}
+    finally{setActionBusy('')}
+  }
+  async function resetAccess(u){
+    setActionBusy(u.id+'reset');setMsg('')
+    try{await callAdmin({action:'reset_access',email:u.email,redirectTo:window.location.origin});setMsg('Se envió el correo para restablecer el acceso a '+u.email+'.')}
+    catch(err){setMsg(String(err?.message||err))}
+    finally{setActionBusy('')}
+  }
+  function status(u){if(u.disabled)return 'Desactivado';if(u.must_change_password)return 'Pendiente de activación';if(u.last_sign_in_at)return 'Activo';return 'Invitado'}
+
+  return <div style={{display:'grid',gap:18}}>
+    <section className="card page-card">
+      <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios y envía una invitación por correo para que definan su contraseña.</p></div><ShieldCheck/></div>
+      <form className="grid-form" onSubmit={createUser}>
+        <div><label>Nombre</label><input value={name} onChange={e=>setName(e.target.value)} required/></div>
+        <div><label>Correo</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></div>
+        <div><label>Rol</label><select value={role} onChange={e=>setRole(e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></div>
+        <div className="invite-note"><label>Acceso</label><p className="muted">El usuario recibirá un correo de invitación y creará su propia contraseña.</p></div>
+        <button className="primary" disabled={busy}>{busy?'Enviando…':'Crear usuario y enviar invitación'}</button>
+      </form>
+      {msg&&<p className="notice">{msg}</p>}
+    </section>
+    <section className="card page-card">
+      <div className="section-head"><div><h2>Usuarios registrados</h2><p className="muted">Administra roles y accesos sin entrar a Supabase.</p></div><button className="secondary" onClick={loadUsers} disabled={loading}>{loading?'Actualizando…':'Actualizar'}</button></div>
+      <div style={{overflowX:'auto'}}>
+        <table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th>Acciones</th></tr></thead>
+        <tbody>{users.map(u=><tr key={u.id}>
+          <td><strong>{u.full_name||'Sin nombre'}</strong><div className="muted">{u.email}</div></td>
+          <td><select value={u.role} disabled={actionBusy===u.id+'role'} onChange={e=>changeRole(u.id,e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></td>
+          <td>{status(u)}</td>
+          <td>{u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-CO'):'—'}</td>
+          <td><div style={{display:'flex',gap:6,flexWrap:'wrap'}}><button className="secondary" disabled={actionBusy===u.id+'reset'} onClick={()=>resetAccess(u)}>Restablecer acceso</button><button className="secondary" disabled={actionBusy===u.id+'access'} onClick={()=>toggleAccess(u)}>{u.disabled?'Reactivar':'Desactivar'}</button></div></td>
+        </tr>)}{!loading&&users.length===0&&<tr><td colSpan="5" className="muted">No hay usuarios registrados.</td></tr>}</tbody></table>
+      </div>
+    </section>
+  </div>
 }
 
 function FilterBar({data,filters,setFilters}){
