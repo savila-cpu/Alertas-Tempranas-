@@ -267,9 +267,9 @@ function AdminUsers(){
     catch(err){setMsg(String(err?.message||err))}
     finally{setActionBusy('')}
   }
-  function status(u){if(u.disabled)return 'Desactivado';if(u.must_change_password)return 'Pendiente de activación';if(u.last_sign_in_at)return 'Activo';return 'Invitado'}
+  function status(u){if(u.disabled)return {label:'Desactivado',cls:'off'};if(u.must_change_password)return {label:'Pendiente de activación',cls:'pending'};if(u.last_sign_in_at)return {label:'Activo',cls:'on'};return {label:'Invitado',cls:'invited'}}
 
-  return <div style={{display:'grid',gap:18}}>
+  return <div className="admin-stack">
     <section className="card page-card">
       <div className="section-head"><div><h2>Administración de usuarios</h2><p className="muted">Crea usuarios y envía una invitación por correo para que definan su contraseña.</p></div><ShieldCheck/></div>
       <form className="grid-form" onSubmit={createUser}>
@@ -282,15 +282,15 @@ function AdminUsers(){
       {msg&&<p className="notice">{msg}</p>}
     </section>
     <section className="card page-card">
-      <div className="section-head"><div><h2>Usuarios registrados</h2><p className="muted">Administra roles y accesos sin entrar a Supabase.</p></div><button className="secondary" onClick={loadUsers} disabled={loading}>{loading?'Actualizando…':'Actualizar'}</button></div>
+      <div className="section-head"><div><h2>Usuarios registrados</h2><p className="muted">Administra roles y accesos sin entrar a Supabase.</p></div><button className="refresh" onClick={loadUsers} disabled={loading}><RefreshCw size={16}/>{loading?'Actualizando…':'Actualizar'}</button></div>
       <div style={{overflowX:'auto'}}>
         <table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th>Acciones</th></tr></thead>
         <tbody>{users.map(u=><tr key={u.id}>
-          <td><strong>{u.full_name||'Sin nombre'}</strong><div className="muted">{u.email}</div></td>
-          <td><select value={u.role} disabled={actionBusy===u.id+'role'} onChange={e=>changeRole(u.id,e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></td>
-          <td>{status(u)}</td>
+          <td><strong>{u.full_name||'Sin nombre'}</strong><div className="muted user-email">{u.email}</div></td>
+          <td><select className="role-select" value={u.role} disabled={actionBusy===u.id+'role'} onChange={e=>changeRole(u.id,e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></td>
+          <td><span className={'status-badge '+status(u).cls}>{status(u).label}</span></td>
           <td>{u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-CO'):'—'}</td>
-          <td><div style={{display:'flex',gap:6,flexWrap:'wrap'}}><button className="secondary" disabled={actionBusy===u.id+'reset'} onClick={()=>resetAccess(u)}>Restablecer acceso</button><button className="secondary" disabled={actionBusy===u.id+'access'} onClick={()=>toggleAccess(u)}>{u.disabled?'Reactivar':'Desactivar'}</button></div></td>
+          <td><div className="user-actions"><button className="ghost small" disabled={actionBusy===u.id+'reset'} onClick={()=>resetAccess(u)}>Restablecer acceso</button><button className={'ghost small '+(u.disabled?'success-action':'danger-action')} disabled={actionBusy===u.id+'access'} onClick={()=>toggleAccess(u)}>{u.disabled?'Reactivar':'Desactivar'}</button></div></td>
         </tr>)}{!loading&&users.length===0&&<tr><td colSpan="5" className="muted">No hay usuarios registrados.</td></tr>}</tbody></table>
       </div>
     </section>
