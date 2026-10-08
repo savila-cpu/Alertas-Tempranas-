@@ -2,3 +2,20 @@
 @media(max-width:1200px){.filters{grid-template-columns:repeat(3,1fr)}.filter-title{grid-column:1/-1}.stats{grid-template-columns:repeat(2,1fr)}.status-cards{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:900px){.app-shell{grid-template-columns:1fr}aside{position:static;height:auto}.brand{margin-bottom:12px}nav{display:grid;grid-template-columns:repeat(2,1fr)}.aside-user{margin-top:16px}.two-col{grid-template-columns:1fr}.source-grid{grid-template-columns:repeat(2,1fr)}main{padding:18px}}
 @media(max-width:600px){.filters{grid-template-columns:1fr}.stats,.source-grid,.status-cards,.grid-form{grid-template-columns:1fr}.page-title{align-items:flex-start;flex-direction:column}nav{grid-template-columns:1fr 1fr}.page-title h1{font-size:23px}}
+
+/* Administración de usuarios */
+.admin-stack{display:grid;gap:18px}
+.user-email{font-size:11px;margin-top:3px}
+.role-select{appearance:auto;min-width:140px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;padding:8px 10px;color:#334155;font-weight:600}
+.role-select:focus{outline:2px solid rgba(23,79,132,.14);border-color:#174f84}
+.user-actions{display:flex;gap:7px;flex-wrap:wrap}
+.ghost.small{padding:7px 10px;font-size:12px;border-radius:8px;font-weight:600}
+.danger-action{color:#b42318;border-color:#f3b3ad;background:#fffafa}
+.danger-action:hover{background:#fff1f0}
+.success-action{color:#067647;border-color:#a9d9c4;background:#f6fef9}
+.success-action:hover{background:#ecfdf3}
+.status-badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.status-badge.on{background:#ecfdf3;color:#067647}
+.status-badge.pending{background:#fff7e6;color:#9a6700}
+.status-badge.off{background:#fff1f0;color:#b42318}
+.status-badge.invited{background:#eef6ff;color:#174f84}
