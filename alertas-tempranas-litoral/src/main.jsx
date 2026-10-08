@@ -195,7 +195,7 @@ function Login({ onLogin }) {
   </div>
 }
 
-function ForcePasswordChange({user,onDone}){
+function ForcePasswordChange({user,onDone,isRecovery=false}){
   const [password,setPassword]=useState('')
   const [confirm,setConfirm]=useState('')
   const [error,setError]=useState('')
@@ -213,8 +213,8 @@ function ForcePasswordChange({user,onDone}){
     onDone()
   }
   return <div className="auth-shell"><form className="card login-card" onSubmit={submit}>
-    <ShieldCheck size={38}/><h2>Crea tu contraseña</h2>
-    <p className="muted">Debes reemplazar la contraseña temporal antes de continuar.</p>
+    <ShieldCheck size={38}/><h2>{isRecovery?'Restablece tu contraseña':'Crea tu contraseña'}</h2>
+    <p className="muted">{isRecovery?'Ingresa una nueva contraseña para recuperar tu acceso.':'Debes crear tu contraseña personal antes de continuar.'}</p>
     <label>Nueva contraseña</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
     <label>Confirmar contraseña</label><input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)} required/>
     {error&&<p className="error">{error}</p>}
@@ -465,19 +465,33 @@ function Dashboard({profile}){
 }
 
 function App(){
-  const [session,setSession]=useState(null),[profile,setProfile]=useState(null),[loading,setLoading]=useState(true)
+  const [session,setSession]=useState(null),[profile,setProfile]=useState(null),[loading,setLoading]=useState(true),[recoveryMode,setRecoveryMode]=useState(false)
   async function loadProfile(user){
     const {data}=await supabase.from('profiles').select('*').eq('id',user.id).single()
     setProfile(data)
   }
   useEffect(()=>{
-    supabase.auth.getSession().then(async({data})=>{setSession(data.session);if(data.session?.user)await loadProfile(data.session.user);setLoading(false)})
-    const {data:sub}=supabase.auth.onAuthStateChange(async(_event,next)=>{setSession(next);if(next?.user)await loadProfile(next.user);else setProfile(null)})
+    const params=new URLSearchParams(window.location.search)
+    const hash=new URLSearchParams(window.location.hash.replace(/^#/,''))
+    if(params.get('type')==='recovery'||hash.get('type')==='recovery') setRecoveryMode(true)
+
+    supabase.auth.getSession().then(async({data})=>{
+      setSession(data.session)
+      if(data.session?.user) await loadProfile(data.session.user)
+      setLoading(false)
+    })
+
+    const {data:sub}=supabase.auth.onAuthStateChange(async(event,next)=>{
+      if(event==='PASSWORD_RECOVERY') setRecoveryMode(true)
+      setSession(next)
+      if(next?.user) await loadProfile(next.user)
+      else setProfile(null)
+    })
     return()=>sub.subscription.unsubscribe()
   },[])
   if(loading)return <div className="center">Cargando…</div>
   if(!session)return <Login onLogin={setSession}/>
-  if(profile?.must_change_password)return <ForcePasswordChange user={session.user} onDone={()=>loadProfile(session.user)}/>
+  if(recoveryMode||profile?.must_change_password)return <ForcePasswordChange user={session.user} isRecovery={recoveryMode} onDone={async()=>{setRecoveryMode(false);await loadProfile(session.user);window.history.replaceState({},document.title,window.location.pathname)}}/>
   return <Dashboard profile={profile}/>
 }
 
