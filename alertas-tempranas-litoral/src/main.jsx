@@ -228,7 +228,20 @@ function AdminUsers(){
 
   async function callAdmin(body){
     const {data,error}=await supabase.functions.invoke('create-user',{body})
-    if(error) throw new Error(error.message||'No se pudo completar la operación.')
+    if(error){
+      let detail=error.message||'No se pudo completar la operación.'
+      try{
+        const ctx=error.context
+        if(ctx?.json){
+          const payload=await ctx.json()
+          detail=payload?.error||detail
+        }else if(ctx instanceof Response){
+          const payload=await ctx.clone().json()
+          detail=payload?.error||detail
+        }
+      }catch{}
+      throw new Error(detail)
+    }
     if(data?.error) throw new Error(data.error)
     return data
   }
