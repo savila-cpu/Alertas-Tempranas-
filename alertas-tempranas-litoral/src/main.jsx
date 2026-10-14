@@ -106,7 +106,8 @@ function normalizeRecord(row){
   const docente=pickFuzzy(row,['docente','nombre_docente','profesor'],[['nombre','docente'],['docente'],['profesor']])
   const asignatura=pickFuzzy(row,['Nombre_asignatura','asignatura','materia','curso'],[['nombre','asignatura'],['asignatura'],['materia']])
   const modalidad=pickFuzzy(row,['modalidad'],[['modalidad']])
-  const bloque=pickFuzzy(row,['bloque'],[['bloque']])
+  const bloqueRaw=pickFuzzy(row,['bloque'],[['bloque']])
+  const bloque=String(bloqueRaw).trim().replace(/\\.0+$/,'')
   const periodo='2026-2'
 
   const porcentajeRaw=pickFuzzy(row,
@@ -397,7 +398,7 @@ function Dashboard({profile}){
   }
   async function logout(){await supabase.auth.signOut()}
 
-  const programCode=value=>String(value||'').trim().match(/^\\d{5,6}(?=\\s*[-–])/u)?.[0]||''
+  const programCode=value=>String(value||'').trim().match(/^[0-9]{5,6}(?=[ ]*[-–])/u)?.[0]||''
   const filtered=useMemo(()=>data.filter(r=>Object.entries(filters).every(([k,v])=>{
     if(!v)return true
     if(k==='programa'){
