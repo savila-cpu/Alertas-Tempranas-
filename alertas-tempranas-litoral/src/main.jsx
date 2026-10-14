@@ -397,7 +397,17 @@ function Dashboard({profile}){
   }
   async function logout(){await supabase.auth.signOut()}
 
-  const filtered=useMemo(()=>data.filter(r=>Object.entries(filters).every(([k,v])=>!v||String(r[k])===v)),[data,filters])
+  const programCode=value=>String(value||'').trim().match(/^\\d{5,6}(?=\\s*[-–])/u)?.[0]||''
+  const filtered=useMemo(()=>data.filter(r=>Object.entries(filters).every(([k,v])=>{
+    if(!v)return true
+    if(k==='programa'){
+      const selectedCode=programCode(v)
+      const recordCode=programCode(r.programa)
+      if(selectedCode&&recordCode)return selectedCode===recordCode
+      return String(r.programa||'').trim()===String(v).trim()
+    }
+    return String(r[k]||'').trim()===String(v).trim()
+  })),[data,filters])
   const reportable=filtered.filter(r=>!r.sinReporte)
   const uniqueStudents=new Set(reportable.map(r=>r.documento||r.estudiante).filter(Boolean))
   const riskStudents=new Set(reportable.filter(r=>r.enRiesgo).map(r=>r.documento||r.estudiante).filter(Boolean))
