@@ -350,6 +350,8 @@ function Dashboard({profile}){
   const [editingFollowup,setEditingFollowup]=useState(null)
   const [savingFollowup,setSavingFollowup]=useState(false)
   const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
+  const [studentStatus,setStudentStatus]=useState('todos')
+  const [studentSearch,setStudentSearch]=useState('')
 
   async function loadData(){
     setLoading(true);setDataError('')
@@ -427,6 +429,28 @@ function Dashboard({profile}){
   },{})).map(x=>({name:x.name,total:x.students.size,risk:x.risk.size,pct:x.students.size?Math.round(x.risk.size/x.students.size*100):0})).sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true}))
 
 
+  const studentRows=Object.values(filtered.reduce((acc,r)=>{
+    const key=String(r.documento||r.estudiante||'').trim()
+    if(!key)return acc
+    if(!acc[key])acc[key]={key,estudiante:r.estudiante,documento:r.documento,programa:r.programa,modalidad:r.modalidad,perdidas:new Set(),tieneReporte:false}
+    const student=acc[key]
+    if(!student.programa && r.programa)student.programa=r.programa
+    if(!student.modalidad && r.modalidad)student.modalidad=r.modalidad
+    if(!r.sinReporte){
+      student.tieneReporte=true
+      if(r.enRiesgo && r.asignatura)student.perdidas.add(r.asignatura)
+    }
+    return acc
+  },{})).map(r=>({...r,asignaturasPerdidas:r.perdidas.size,detallePerdidas:[...r.perdidas].join(', ')}))
+    .sort((a,b)=>String(a.estudiante).localeCompare(String(b.estudiante),'es'))
+  const visibleStudentRows=studentRows.filter(r=>{
+    if(studentStatus==='perdidas' && r.asignaturasPerdidas===0)return false
+    if(studentStatus==='sin_perdidas' && (r.asignaturasPerdidas>0 || !r.tieneReporte))return false
+    if(studentStatus==='pendientes' && r.tieneReporte)return false
+    const query=normalize(studentSearch)
+    return !query || normalize(r.estudiante).includes(query) || normalize(r.documento).includes(query)
+  })
+
   const bienestarRows=Object.values(filtered.reduce((acc,r)=>{
     const key=r.documento||r.estudiante||`${r.programa}-${r.asignatura}`
     if(!acc[key]) acc[key]={...r,subjects:new Set(),teachers:new Set()}
@@ -445,6 +469,7 @@ function Dashboard({profile}){
 
   const menu=[
     ['inicio','Inicio',LayoutDashboard],
+    ['estudiantes','Estudiantes',Users],
     ['programas','Programas',GraduationCap],
     ['docentes','Docentes',UserRound],
     ['asignaturas','Asignaturas',BookOpen],
@@ -497,6 +522,26 @@ function Dashboard({profile}){
           </section>
         </div>
       </>}
+
+      {tab==='estudiantes'&&<section className="card page-card">
+        <div className="page-title compact"><div><h1>Estudiantes</h1><p>Consulta de estudiantes únicos, con asignaturas perdidas y sin asignaturas perdidas, según los filtros académicos.</p></div></div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:14,alignItems:'end',marginBottom:18}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:230}}>Situación académica
+            <select value={studentStatus} onChange={e=>setStudentStatus(e.target.value)}>
+              <option value="todos">Todos</option>
+              <option value="perdidas">Con asignaturas perdidas</option>
+              <option value="sin_perdidas">Sin asignaturas perdidas</option>
+              <option value="pendientes">Sin evaluación reportada</option>
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:250}}>Buscar estudiante
+            <input type="search" placeholder="Nombre o identificación" value={studentSearch} onChange={e=>setStudentSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
+          </label>
+          <button className="refresh" onClick={()=>{setStudentStatus('todos');setStudentSearch('')}}>Limpiar búsqueda</button>
+        </div>
+        <p className="muted">{visibleStudentRows.length} estudiantes en el listado · {studentRows.length} estudiantes en la selección · {studentRows.filter(r=>r.asignaturasPerdidas>0).length} con asignaturas perdidas</p>
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'documento',label:'Identificación'},{key:'programa',label:'Programa'},{key:'modalidad',label:'Modalidad'},{key:'asignaturasPerdidas',label:'Asignaturas perdidas',render:r=><span className={r.asignaturasPerdidas?'pill red':'pill'}>{r.tieneReporte?r.asignaturasPerdidas:'Sin evaluar'}</span>},{key:'detallePerdidas',label:'Detalle de asignaturas perdidas',render:r=>r.detallePerdidas||'—'}]} rows={visibleStudentRows}/>
+      </section>}
 
       {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado de todos los estudiantes registrados, incluidos los que no presentan alerta.</p></div></div>
         <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'Registros en riesgo'},{key:'pct',label:'% pérdida',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
