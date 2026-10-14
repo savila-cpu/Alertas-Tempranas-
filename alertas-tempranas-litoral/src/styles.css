@@ -84,3 +84,9 @@ tbody tr:hover{background:#faf8ff}
 .cut-track>div{background:linear-gradient(90deg,#9b83eb,#6b4ab6)}
 @media(max-width:1050px){.analytics-grid{grid-template-columns:1fr}.analytics-wide{grid-column:auto}}
 @media(max-width:600px){.bar-chart-row{grid-template-columns:100px 1fr 26px;gap:6px}.cut-row{grid-template-columns:110px 1fr 36px;gap:6px}.cut-row small{display:none}.donut-layout{flex-direction:column;gap:12px}}
+
+/* Mostrar los nombres completos de los programas en la grafica de alertas */
+.bar-chart-row{grid-template-columns:minmax(250px,360px) minmax(100px,1fr) 32px;align-items:center}
+.bar-label{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4;font-size:12px}
+@media(max-width:900px){.bar-chart-row{grid-template-columns:minmax(160px,45%) minmax(65px,1fr) 30px}}
+@media(max-width:600px){.bar-chart-row{grid-template-columns:minmax(125px,52%) minmax(45px,1fr) 26px}}
