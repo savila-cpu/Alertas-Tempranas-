@@ -19,3 +19,47 @@
 .status-badge.pending{background:#fff7e6;color:#9a6700}
 .status-badge.off{background:#fff1f0;color:#b42318}
 .status-badge.invited{background:#eef6ff;color:#174f84}
+
+/* Tema lila: panel académico inspirado en las referencias */
+:root{--purple:#8e73df;--purple-deep:#43227d;--purple-soft:#eee9fb;--ink:#24243a;--line:#ece9f4}
+body{background:#e3e0ef;color:var(--ink)}
+.app-shell{background:#e3e0ef;grid-template-columns:232px minmax(0,1fr)}
+aside{background:#fff;color:var(--ink);border-right:1px solid var(--line);padding:25px 16px}
+.brand h2{color:#34265b}.brand p{color:#85799f}
+.brand-badge,.brand-mark{background:linear-gradient(135deg,#a78bfa,#6d46c3);box-shadow:0 6px 16px #8e73df33}
+nav button,.logout{color:#635c73;font-weight:600}
+nav button:hover{background:#f4f0ff;color:#6f4ab7}
+nav button.active{background:#9279e5;color:#fff;box-shadow:0 7px 15px #8e73df35}
+.aside-user{border-top-color:#eee9f4}.aside-user span{color:#33264d}.aside-user small{color:#81788d}
+.logout:hover{background:#f4f0ff;color:#6f4ab7}
+main{padding:30px 34px;background:radial-gradient(ellipse at 70% 5%,#f6e9f1 0%,transparent 42%),#e3e0ef}
+.card{background:rgba(255,255,255,.93);border:1px solid #f2eef8;border-radius:22px;box-shadow:0 10px 26px rgba(57,40,100,.055)}
+.page-card{padding:23px}
+.page-title h1,.section-head h2{color:#2d2743}
+.muted,.page-title p,.stat span{color:#7c768d}
+.primary{background:#9279e5;border-radius:12px;box-shadow:0 5px 12px #8e73df30}
+.primary:hover{background:#7b60cf}
+.ghost,.refresh{border-color:#ded5f2;color:#5c448f;border-radius:11px}
+.ghost:hover,.refresh:hover{background:#f6f2ff}
+.filters{background:#fff}
+.login-card input:focus,.grid-form input:focus,.filter-field select:focus{border-color:#9279e5;box-shadow:0 0 0 3px #9279e529}
+.auth-shell{background:linear-gradient(140deg,#d9d0f0,#f4e9f6)}
+.stat{position:relative;overflow:hidden;min-height:126px}
+.stat:before{content:"";position:absolute;right:20px;top:20px;width:51px;height:51px;border-radius:50%;background:conic-gradient(#9b81e7 0 74%,#eee9fa 74% 100%);opacity:.85}
+.stat:after{content:"";position:absolute;right:30px;top:30px;width:31px;height:31px;background:#fff;border-radius:50%}
+.stat:nth-child(2):before{background:conic-gradient(#f4a76a 0 64%,#f8e9de 64%)}
+.stat:nth-child(3):before{background:conic-gradient(#75c5d6 0 78%,#e2f3f6 78%)}
+.stat:nth-child(4):before{background:conic-gradient(#9ad48c 0 67%,#e6f5e3 67%)}
+.stat strong{color:#3e345b;font-size:33px}
+.stat.risk strong{color:#d16e69}
+.mini-card,.source-grid>div{background:#faf9fe;border-color:#eee9f6;border-radius:16px}
+th{background:#f7f4fd;color:#66567f;border-bottom-color:#e9e2f6}
+td{border-bottom-color:#f0ebf7}
+tbody tr:hover{background:#faf8ff}
+.pill{background:#eee8ff;color:#6d46b6}
+.notice,.banner.info{background:#f1ecff;color:#6746a7}
+.role-select{border-color:#dcd4ee}
+.role-select:focus{border-color:#9279e5;outline-color:#9279e52b}
+.status-badge.invited{background:#f0eaff;color:#6e4bb3}
+@media(max-width:900px){.app-shell{grid-template-columns:1fr}aside{height:auto;position:static}main{padding:20px}}
+@media(max-width:600px){main{padding:14px}.page-card{padding:16px}}
