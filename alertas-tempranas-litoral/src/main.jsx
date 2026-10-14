@@ -321,7 +321,7 @@ function FilterBar({data,filters,setFilters}){
     {field('programa','Programa',uniq('programa').filter(p=>data.some(r=>String(r.programa||'').trim()===p)))}
     {field('modalidad','Modalidad',uniq('modalidad'))}
     {field('bloque','Bloque',uniq('bloque'))}
-    {field('corte','Corte',uniq('corte'))}
+    {field('corte','Corte',normalize(filters.modalidad).includes('presencial')?['1','2','3']:normalize(filters.modalidad).includes('virtual')?['1','2']:uniq('corte').includes('3')?['1','2','3']:['1','2','3'])}
     {field('docente','Docente',uniq('docente'))}
     <button className="ghost" onClick={()=>setFilters({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})}><FilterX size={16}/>Limpiar</button>
   </div>
