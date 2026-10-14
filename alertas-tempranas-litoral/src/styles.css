@@ -63,3 +63,24 @@ tbody tr:hover{background:#faf8ff}
 .status-badge.invited{background:#f0eaff;color:#6e4bb3}
 @media(max-width:900px){.app-shell{grid-template-columns:1fr}aside{height:auto;position:static}main{padding:20px}}
 @media(max-width:600px){main{padding:14px}.page-card{padding:16px}}
+
+.analytics-grid{display:grid;grid-template-columns:1.45fr 1fr;gap:16px;margin:18px 0}
+.analytics-card{min-height:270px}.analytics-wide{grid-column:1/-1;min-height:0}
+.bar-chart{display:flex;flex-direction:column;gap:15px;margin-top:23px}
+.bar-chart-row{display:grid;grid-template-columns:minmax(120px,220px) minmax(80px,1fr) 32px;gap:12px;align-items:center;font-size:12px}
+.bar-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#615777}
+.bar-track,.cut-track{height:13px;background:#f1eef7;border-radius:30px;overflow:hidden}
+.bar-fill,.cut-track>div{height:100%;border-radius:30px;transition:width .3s ease}
+.bar-chart-row strong,.cut-row strong{color:#4c387a}
+.donut-layout{display:flex;align-items:center;justify-content:center;gap:30px;min-height:195px}
+.risk-donut{width:174px;height:174px;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+.risk-donut>div{background:white;width:125px;height:125px;border-radius:50%;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.risk-donut strong{font-size:36px;color:#4d377e}.risk-donut span{font-size:12px;color:#8a8299}
+.donut-legend{display:flex;flex-direction:column;gap:18px;min-width:135px;font-size:13px}
+.donut-legend>div{display:flex;align-items:center;gap:8px}.donut-legend i{width:12px;height:12px;border-radius:50%}.donut-legend strong{margin-left:auto}
+.cut-chart{display:flex;flex-direction:column;gap:14px;margin-top:18px}
+.cut-row{display:grid;grid-template-columns:minmax(130px,220px) minmax(80px,1fr) 48px 90px;gap:14px;align-items:center;font-size:13px}
+.cut-row>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cut-row small{color:#91899e}
+.cut-track>div{background:linear-gradient(90deg,#9b83eb,#6b4ab6)}
+@media(max-width:1050px){.analytics-grid{grid-template-columns:1fr}.analytics-wide{grid-column:auto}}
+@media(max-width:600px){.bar-chart-row{grid-template-columns:100px 1fr 26px;gap:6px}.cut-row{grid-template-columns:110px 1fr 36px;gap:6px}.cut-row small{display:none}.donut-layout{flex-direction:column;gap:12px}}
