@@ -108,7 +108,7 @@ function normalizeRecord(row){
   const modalidad=pickFuzzy(row,['modalidad'],[['modalidad']])
   const bloqueRaw=pickFuzzy(row,['bloque'],[['bloque']])
   const bloque=String(bloqueRaw).trim().replace(/\\.0+$/,'')
-  const periodo='2026-2'
+  const periodo=pickFuzzy(row,['Nombre_periodo','periodo'],[['nombre','periodo'],['periodo']])||'2026-2'
 
   const porcentajeRaw=pickFuzzy(row,
     ['Porcentaje_evaluado','porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
@@ -134,7 +134,8 @@ function normalizeRecord(row){
     [['promedio','evalu'],['promedio'],['nota','actual'],['acumulado']]
   )
 
-  const corte=pickFuzzy(row,['Corte','corte'],[['corte']])
+  const corteRaw=pickFuzzy(row,['Corte','corte'],[['corte']])
+  const corte=String(corteRaw).trim().replace(/\.0+$/,'')
   const estadoBienestar=pickFuzzy(row,['estado_bienestar','estado_seguimiento','estado'],[['estado','bienestar'],['estado','seguimiento']])
   const observaciones=pickFuzzy(row,['observaciones','observacion','seguimiento'],[['observacion'],['seguimiento']])
   const asesor=pickFuzzy(row,['asesor','asesor_asignado'],[['asesor']])
@@ -312,12 +313,12 @@ function AdminUsers(){
 }
 
 function FilterBar({data,filters,setFilters}){
-  const uniq=k=>[...new Set(data.map(x=>x[k]).filter(Boolean))].sort((a,b)=>a.localeCompare(b))
+  const uniq=k=>[...new Set(data.map(x=>String(x[k]??'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
   const field=(k,label,items)=> <label className="filter-field">{label}<div className="select-wrap"><select value={filters[k]} onChange={e=>setFilters({...filters,[k]:e.target.value})}><option value="">Todos</option>{items.map(v=><option key={v}>{v}</option>)}</select><ChevronDown size={15}/></div></label>
   return <div className="filters card">
     <div className="filter-title"><Search size={17}/><b>Filtros</b></div>
     {field('periodo','Periodo',uniq('periodo').filter(x=>['2026-1','2026-2'].includes(x)||!/^2025/.test(x)))}
-    {field('programa','Programa',uniq('programa'))}
+    {field('programa','Programa',uniq('programa').filter(p=>data.some(r=>String(r.programa||'').trim()===p)))}
     {field('modalidad','Modalidad',uniq('modalidad'))}
     {field('bloque','Bloque',uniq('bloque'))}
     {field('corte','Corte',uniq('corte'))}
