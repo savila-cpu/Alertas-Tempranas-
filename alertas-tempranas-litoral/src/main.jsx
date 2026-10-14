@@ -345,6 +345,10 @@ function Dashboard({profile}){
   const [loading,setLoading]=useState(true)
   const [dataError,setDataError]=useState('')
   const [updated,setUpdated]=useState(null)
+  const [followups,setFollowups]=useState({})
+  const [followupError,setFollowupError]=useState('')
+  const [editingFollowup,setEditingFollowup]=useState(null)
+  const [savingFollowup,setSavingFollowup]=useState(false)
   const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
 
   async function loadData(){
@@ -371,6 +375,26 @@ function Dashboard({profile}){
     }finally{setLoading(false)}
   }
   useEffect(()=>{loadData()},[])
+  async function loadFollowups(){
+    const {data:rows,error}=await supabase.from('student_followups').select('student_key,estado,observaciones')
+    if(error){setFollowupError('No se pudieron consultar los seguimientos: '+error.message);return}
+    setFollowupError('')
+    setFollowups(Object.fromEntries((rows||[]).map(r=>[r.student_key,r])))
+  }
+  useEffect(()=>{loadFollowups()},[])
+  const canEditFollowups=['admin','bienestar','coordinator'].includes(profile?.role)
+  function followupKey(r){return String(r.documento||r.estudiante||'').trim()}
+  async function saveFollowup(e){
+    e.preventDefault()
+    if(!editingFollowup||!canEditFollowups)return
+    setSavingFollowup(true);setFollowupError('')
+    const payload={student_key:editingFollowup.key,estado:editingFollowup.estado,observaciones:editingFollowup.observaciones,updated_by:profile.id,updated_at:new Date().toISOString()}
+    const {error}=await supabase.from('student_followups').upsert(payload,{onConflict:'student_key'})
+    setSavingFollowup(false)
+    if(error){setFollowupError('No se pudo guardar: '+error.message);return}
+    setFollowups(old=>({...old,[payload.student_key]:payload}))
+    setEditingFollowup(null)
+  }
   async function logout(){await supabase.auth.signOut()}
 
   const filtered=useMemo(()=>data.filter(r=>Object.entries(filters).every(([k,v])=>!v||String(r[k])===v)),[data,filters])
@@ -399,7 +423,7 @@ function Dashboard({profile}){
     if(r.asignatura) acc[key].subjects.add(r.asignatura)
     if(r.docente) acc[key].teachers.add(r.docente)
     return acc
-  },{})).map(r=>({...r,asignaturas:[...r.subjects].join(', '),docentes:[...r.teachers].join(', ')}))
+  },{})).map(r=>({...r,asignaturas:[...r.subjects].join(', '),docentes:[...r.teachers].join(', '),estadoBienestar:followups[followupKey(r)]?.estado||r.estadoBienestar||'Sin seguimiento',observaciones:followups[followupKey(r)]?.observaciones||r.observaciones||''}))
 
   function downloadBienestar(){
     const headers=['Estudiante','Documento','Programa','Modalidad','Asignaturas','Estado bienestar','Observaciones']
@@ -483,7 +507,9 @@ function Dashboard({profile}){
             return <div className="mini-card" key={s}><b>{n}</b><span>{s}</span></div>
           })}
         </div>
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'}]} rows={bienestarRows}/>
+        {followupError&&<div className="banner danger">{followupError}</div>}
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<button className="refresh" onClick={()=>setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}>Editar seguimiento</button>:'Solo lectura'}]} rows={bienestarRows}/>
+        {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{marginTop:18}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','No interesado','Interesado en plan de mejoramiento'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
       </section>}
 
       {tab==='fuente'&&<section className="card page-card"><div className="page-title compact"><div><h1>Fuente de datos</h1><p>Estado de sincronización del tablero.</p></div></div>
