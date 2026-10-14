@@ -382,6 +382,16 @@ function Dashboard({profile}){
   const teacherRows=groupRows(reportable,'docente')
   const subjectRows=groupRows(reportable,'asignatura')
   const riskRows=reportable.filter(r=>r.enRiesgo)
+  const riskPct=uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0
+  const topRiskPrograms=[...programRows].sort((a,b)=>b.risk-a.risk).slice(0,6)
+  const cutStats=Object.values(reportable.reduce((acc,r)=>{
+    const key=[r.bloque||'Sin bloque',r.corte||'Sin corte'].join(' · ')
+    if(!acc[key]) acc[key]={name:key,students:new Set(),risk:new Set()}
+    const id=r.documento||r.estudiante
+    if(id){acc[key].students.add(id);if(r.enRiesgo)acc[key].risk.add(id)}
+    return acc
+  },{})).map(x=>({name:x.name,total:x.students.size,risk:x.risk.size,pct:x.students.size?Math.round(x.risk.size/x.students.size*100):0})).sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true}))
+
 
   const bienestarRows=Object.values(riskRows.reduce((acc,r)=>{
     const key=r.documento||r.estudiante||`${r.programa}-${r.asignatura}`
@@ -429,6 +439,20 @@ function Dashboard({profile}){
           <div className="card stat risk"><span>En riesgo</span><strong>{riskStudents.size}</strong><small>{uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0}% de estudiantes</small></div>
           <div className="card stat"><span>Programas</span><strong>{programs.size}</strong><small>en el filtro actual</small></div>
           <div className="card stat"><span>Registros</span><strong>{reportable.length}</strong><small>{filtered.length-reportable.length} sin reporte por bloque</small></div>
+        </div>
+        <div className="analytics-grid">
+          <section className="card page-card analytics-card">
+            <div className="section-head"><div><h2>Alertas por programa</h2><p className="muted">Estudiantes con alerta por programa · máximo 6</p></div></div>
+            {topRiskPrograms.length?<div className="bar-chart">{topRiskPrograms.map((p,i)=><div className="bar-chart-row" key={p.name}><div className="bar-label" title={p.name}>{p.name.replace(/^\\d+\\s*-\\s*/, '')}</div><div className="bar-track"><div className="bar-fill" style={{width:`${p.risk/Math.max(...topRiskPrograms.map(x=>x.risk),1)*100}%`,background:['#9279e5','#f3a36d','#79c7d8','#b58ae7','#9cd18f','#e58cae'][i]}}/></div><strong>{p.risk}</strong></div>)}</div>:<p className="muted">No hay alertas para los filtros seleccionados.</p>}
+          </section>
+          <section className="card page-card analytics-card">
+            <div className="section-head"><div><h2>Distribución del riesgo</h2><p className="muted">Estudiantes únicos con información reportable</p></div></div>
+            <div className="donut-layout"><div className="risk-donut" style={{background:`conic-gradient(#9279e5 0 ${riskPct}%, #eae6f4 ${riskPct}% 100%)`}}><div><strong>{riskPct}%</strong><span>En riesgo</span></div></div><div className="donut-legend"><div><i style={{background:'#9279e5'}}/>En riesgo <strong>{riskStudents.size}</strong></div><div><i style={{background:'#eae6f4'}}/>Sin alerta <strong>{Math.max(0,uniqueStudents.size-riskStudents.size)}</strong></div></div></div>
+          </section>
+          <section className="card page-card analytics-card analytics-wide">
+            <div className="section-head"><div><h2>Riesgo por bloque y corte</h2><p className="muted">Porcentaje de estudiantes únicos en riesgo en cada grupo · no representa evolución temporal individual</p></div></div>
+            {cutStats.length?<div className="cut-chart">{cutStats.map(x=><div className="cut-row" key={x.name}><span title={x.name}>{x.name}</span><div className="cut-track"><div style={{width:`${x.pct}%`}}/></div><strong>{x.pct}%</strong><small>{x.risk} de {x.total}</small></div>)}</div>:<p className="muted">No hay cortes con información reportable.</p>}
+          </section>
         </div>
         <div className="two-col">
           <section className="card page-card"><div className="section-head"><div><h2>Programas con mayor alerta</h2><p className="muted">Porcentaje de registros clasificados en riesgo.</p></div></div>
