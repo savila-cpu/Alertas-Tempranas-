@@ -402,7 +402,7 @@ function Dashboard({profile}){
   const uniqueStudents=new Set(reportable.map(r=>r.documento||r.estudiante).filter(Boolean))
   const riskStudents=new Set(reportable.filter(r=>r.enRiesgo).map(r=>r.documento||r.estudiante).filter(Boolean))
   const programs=new Set(reportable.map(r=>r.programa).filter(Boolean))
-  const programRows=groupRows(reportable,'programa')
+  const programRows=groupRows(filtered,'programa')
   const teacherRows=groupRows(reportable,'docente')
   const subjectRows=groupRows(reportable,'asignatura')
   const riskRows=reportable.filter(r=>r.enRiesgo)
@@ -417,7 +417,7 @@ function Dashboard({profile}){
   },{})).map(x=>({name:x.name,total:x.students.size,risk:x.risk.size,pct:x.students.size?Math.round(x.risk.size/x.students.size*100):0})).sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true}))
 
 
-  const bienestarRows=Object.values(riskRows.reduce((acc,r)=>{
+  const bienestarRows=Object.values(filtered.reduce((acc,r)=>{
     const key=r.documento||r.estudiante||`${r.programa}-${r.asignatura}`
     if(!acc[key]) acc[key]={...r,subjects:new Set(),teachers:new Set()}
     if(r.asignatura) acc[key].subjects.add(r.asignatura)
@@ -488,8 +488,8 @@ function Dashboard({profile}){
         </div>
       </>}
 
-      {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado por programa académico.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros evaluados'},{key:'risk',label:'Registros en riesgo'},{key:'pct',label:'% pérdida',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
+      {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado de todos los estudiantes registrados, incluidos los que no presentan alerta.</p></div></div>
+        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'Registros en riesgo'},{key:'pct',label:'% pérdida',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
       </section>}
 
       {tab==='docentes'&&<section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Total de estudiantes atendidos y relación de pérdida.</p></div></div>
@@ -500,7 +500,7 @@ function Dashboard({profile}){
         <SimpleTable columns={[{key:'name',label:'Asignatura'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'En riesgo'},{key:'pct',label:'% pérdida'}]} rows={subjectRows}/>
       </section>}
 
-      {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Estudiantes identificados con alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
+      {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Todos los estudiantes del filtro seleccionado, con o sin alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
         <div className="status-cards">
           {['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(s=>{
             const n=bienestarRows.filter(r=>(r.estadoBienestar||'Sin seguimiento')===s).length
@@ -509,7 +509,7 @@ function Dashboard({profile}){
         </div>
         {followupError&&<div className="banner danger">{followupError}</div>}
         {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{margin:"16px 0",border:"2px solid #8e72de"}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<button className="refresh" onClick={()=>setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}>Editar seguimiento</button>:'Solo lectura'}]} rows={bienestarRows}/>
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<button className="refresh" onClick={()=>setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}>Editar seguimiento</button>:'Solo lectura'}]} rows={bienestarRows}/>
 
       </section>}
 
