@@ -334,12 +334,59 @@ const groupRows=(data,key)=>Object.values(data.reduce((acc,r)=>{
 },{})).map(x=>({...x,students:x.students.size,pct:x.total?Math.round(x.risk/x.total*100):0})).sort((a,b)=>b.pct-a.pct)
 
 // Equivalencias académicas explícitas. No fusionar asignaturas solo por palabras comunes.
+// Normalización de variantes tipográficas y sufijos de grupo/programa observados en Notas.
+// Las equivalencias de contenido se limitan a denominaciones académicas afines conocidas.
 const SUBJECT_EQUIVALENCES = {
   'taller_de_comunicaciones': 'Competencias Comunicativas',
-  'competencias_comunicativas': 'Competencias Comunicativas'
+  'competencias_comunicativas': 'Competencias Comunicativas',
+  'tecnologia_de_la_informacion_y_comunicacion': 'Tecnologías de Información y Comunicación',
+  'tecnologias_de_informacion_y_comunicacion': 'Tecnologías de Información y Comunicación',
+  'tecnologia_de_informacion_y_comunicacion': 'Tecnologías de Información y Comunicación',
+  'tecnologias_de_la_informacion_y_comunicacion': 'Tecnologías de Información y Comunicación',
+  'catedra_litoralista_para_la_paz': 'Cátedra Litoralista',
+  'catedra_litoralista': 'Cátedra Litoralista',
+  'catedra_de_transformacion_social': 'Cátedra de Transformación Social',
+  'catedra_transformacion_social': 'Cátedra de Transformación Social',
+  'matematicas_basicas': 'Matemática Básica',
+  'matematica_basica': 'Matemática Básica',
+  'diseno_proyectos': 'Diseño de Proyectos',
+  'diseno_de_proyectos': 'Diseño de Proyectos',
+  'diseno_de_proyectos_de_investigacion': 'Diseño de Proyectos de Investigación',
+  'diseno_proyectos_de_investigacion': 'Diseño de Proyectos de Investigación',
+  'practicas': 'Prácticas Empresariales',
+  'practica_empresarial': 'Prácticas Empresariales',
+  'practicas_empresariales': 'Prácticas Empresariales',
+  'electiva_internacional': 'Electiva de Internacionalización',
+  'electiva_internacionalizacion': 'Electiva de Internacionalización',
+  'electiva_de_internacionalizacion': 'Electiva de Internacionalización',
+  'electiva_tecnologica': 'Electiva Tecnológica',
+  'electiva_empresarial': 'Electiva Empresarial',
+  'cadena_de_suministros': 'Cadena de Suministros',
+  'cadena_de_suministro': 'Cadena de Suministros',
+  'sistema_de_gestion_de_calidad': 'Sistema de Gestión de Calidad',
+  'sistemas_de_gestion_de_calidad': 'Sistema de Gestión de Calidad',
+  'manejo_de_almacenes_e_inventarios': 'Manejo de Almacenes e Inventarios',
+  'fundamentos_de_administracion': 'Fundamentos de Administración',
+  'fundamentos_de_mercadeo': 'Fundamentos de Marketing',
+  'fundamentos_de_marketing': 'Fundamentos de Marketing',
+  'contabiidad_general': 'Contabilidad General',
+  'contabilidad_general': 'Contabilidad General',
+  'costos_y_presupuestos': 'Costos y Presupuestos',
+  'costos_y_presupuesto': 'Costos y Presupuestos',
+  'catedra_de_sostenibilidad': 'Cátedra de Sostenibilidad',
+  'catedra_sostenibilidad': 'Cátedra de Sostenibilidad',
+  'catedra_de_emprendimiento': 'Emprendimiento',
+  'emprendimiento': 'Emprendimiento',
+  'seminario_marca_branding': 'Seminario Marca - Branding'
+}
+function subjectBaseName(name){
+  return String(name||'').trim()
+    .replace(/^[.\\-*\\s]+/u,'')
+    .replace(/\\s*-\\s*(?:TP[A-Z0-9]+|TL[A-Z0-9]+|MKTD|TPSST)\\s*$/iu,'')
+    .replace(/\\s+/gu,' ').trim()
 }
 function subjectGroupName(name){
-  const original=String(name||'').trim()
+  const original=subjectBaseName(name)
   const key=normalize(original)
   return SUBJECT_EQUIVALENCES[key] || original || 'Sin información'
 }
