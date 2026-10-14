@@ -9,9 +9,10 @@ import { supabase } from './supabase'
 import './styles.css'
 
 const SHEET_ID = '1LC9xS0TyExB9Foy7UWqwV1CNcbJ2kE8gQxRq4gzmMoc'
-const SHEET_NAME = 'Notas'
+const SHEET_GID = '260302609'
 const SHEET_CSV_URLS = [
-  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_NAME)}`
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`
 ]
 
 const normalize = (value='') => String(value)
