@@ -381,7 +381,7 @@ const SUBJECT_EQUIVALENCES = {
 }
 function subjectBaseName(name){
   return String(name||'').trim()
-    .replace(/^[.\\-*\\s]+/u,'')
+    .replace(/^[.*\\s-]+/u,'')
     .replace(/\\s*-\\s*(?:TP[A-Z0-9]+|TL[A-Z0-9]+|MKTD|TPSST)\\s*$/iu,'')
     .replace(/\\s+/gu,' ').trim()
 }
