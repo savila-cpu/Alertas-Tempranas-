@@ -358,7 +358,8 @@ function Dashboard({profile}){
           const text=await res.text()
           if(text.trim().startsWith('<!DOCTYPE')||text.includes('<html')) throw new Error('respuesta HTML')
           const candidate=parseCSV(text).map(normalizeRecord)
-          if(candidate.length){ parsed=candidate; break }
+          if(candidate.length >= 1000){ parsed=candidate; break }
+          if(candidate.length){ lastError=`La fuente devolvió solo ${candidate.length} registros; se esperaba la pestaña completa de Notas. No se utilizará una hoja parcial.`; continue }
           lastError='La hoja respondió, pero no devolvió filas de datos.'
         }catch(e){ lastError=e.message }
       }
