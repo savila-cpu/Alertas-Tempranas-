@@ -333,6 +333,37 @@ const groupRows=(data,key)=>Object.values(data.reduce((acc,r)=>{
   return acc
 },{})).map(x=>({...x,students:x.students.size,pct:x.total?Math.round(x.risk/x.total*100):0})).sort((a,b)=>b.pct-a.pct)
 
+// Equivalencias académicas explícitas. No fusionar asignaturas solo por palabras comunes.
+const SUBJECT_EQUIVALENCES = {
+  'taller_de_comunicaciones': 'Competencias Comunicativas',
+  'competencias_comunicativas': 'Competencias Comunicativas'
+}
+function subjectGroupName(name){
+  const original=String(name||'').trim()
+  const key=normalize(original)
+  return SUBJECT_EQUIVALENCES[key] || original || 'Sin información'
+}
+function groupSubjects(data){
+  const groups=new Map()
+  for(const r of data){
+    const name=subjectGroupName(r.asignatura)
+    const key=normalize(name)
+    if(!groups.has(key))groups.set(key,{name,total:0,risk:0,students:new Set(),variants:new Set(),riskStudents:new Set()})
+    const g=groups.get(key)
+    g.total++
+    if(r.enRiesgo)g.risk++
+    const student=String(r.documento||r.estudiante||'').trim()
+    if(student){g.students.add(student);if(r.enRiesgo)g.riskStudents.add(student)}
+    if(r.asignatura)g.variants.add(r.asignatura)
+  }
+  return [...groups.values()].map(g=>({
+    name:g.name,total:g.total,risk:g.risk,students:g.students.size,
+    riskStudents:g.riskStudents.size,
+    variants:[...g.variants].sort((a,b)=>a.localeCompare(b,'es')).join(' · '),
+    pct:g.total?Math.round(g.risk/g.total*100):0
+  })).sort((a,b)=>b.risk-a.risk || b.riskStudents-a.riskStudents || a.name.localeCompare(b.name,'es'))
+}
+
 function SimpleTable({columns,rows,empty='No hay información para mostrar.'}){
   return <div className="table-wrap"><table><thead><tr>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead><tbody>
     {rows.length===0?<tr><td colSpan={columns.length} className="empty">{empty}</td></tr>:rows.map((r,i)=><tr key={i}>{columns.map(c=><td key={c.key}>{c.render?c.render(r):r[c.key]}</td>)}</tr>)}
@@ -416,7 +447,7 @@ function Dashboard({profile}){
   const programs=new Set(reportable.map(r=>r.programa).filter(Boolean))
   const programRows=groupRows(filtered,'programa')
   const teacherRows=groupRows(reportable,'docente')
-  const subjectRows=groupRows(reportable,'asignatura')
+  const subjectRows=groupSubjects(reportable)
   const riskRows=reportable.filter(r=>r.enRiesgo)
   const riskPct=uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0
   const topRiskPrograms=[...programRows].sort((a,b)=>b.risk-a.risk).slice(0,6)
@@ -551,8 +582,8 @@ function Dashboard({profile}){
         <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Total estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'En riesgo'},{key:'pct',label:'% pérdida',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={teacherRows}/>
       </section>}
 
-      {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Asignaturas consolidadas según el nombre reportado en la fuente.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Asignatura'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'En riesgo'},{key:'pct',label:'% pérdida'}]} rows={subjectRows}/>
+      {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Listado de mayor a menor pérdida. Se agrupan denominaciones idénticas y equivalencias académicas definidas, sin modificar los datos originales.</p></div></div>
+        <SimpleTable columns={[{key:'name',label:'Asignatura agrupada'},{key:'variants',label:'Denominaciones incluidas'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'Registros con pérdida'},{key:'riskStudents',label:'Estudiantes con pérdida'},{key:'pct',label:'% pérdida'}]} rows={subjectRows}/>
       </section>}
 
       {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Todos los estudiantes del filtro seleccionado, con o sin alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
