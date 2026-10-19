@@ -430,6 +430,7 @@ function Dashboard({profile}){
   const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
   const [studentStatus,setStudentStatus]=useState('todos')
   const [studentSearch,setStudentSearch]=useState('')
+  const [bienestarSearch,setBienestarSearch]=useState('')
 
   async function loadData(){
     setLoading(true);setDataError('')
@@ -537,9 +538,14 @@ function Dashboard({profile}){
     return acc
   },{})).map(r=>({...r,asignaturas:[...r.subjects].join(', '),docentes:[...r.teachers].join(', '),estadoBienestar:followups[followupKey(r)]?.estado||r.estadoBienestar||'Sin seguimiento',observaciones:followups[followupKey(r)]?.observaciones||r.observaciones||''}))
 
+  const visibleBienestarRows=bienestarRows.filter(r=>{
+    const query=normalize(bienestarSearch)
+    return !query || normalize(r.estudiante).includes(query) || normalize(r.documento).includes(query)
+  })
+
   function downloadBienestar(){
     const headers=['Estudiante','Documento','Programa','Modalidad','Asignaturas','Estado bienestar','Observaciones']
-    const lines=[headers,...bienestarRows.map(r=>[r.estudiante,r.documento,r.programa,r.modalidad,r.asignaturas,r.estadoBienestar,r.observaciones])]
+    const lines=[headers,...visibleBienestarRows.map(r=>[r.estudiante,r.documento,r.programa,r.modalidad,r.asignaturas,r.estadoBienestar,r.observaciones])]
     const csv=lines.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n')
     const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'})
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seguimiento-bienestar.csv';a.click();URL.revokeObjectURL(a.href)
@@ -634,15 +640,22 @@ function Dashboard({profile}){
       </section>}
 
       {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Todos los estudiantes del filtro seleccionado, con o sin alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:12,alignItems:'end',margin:'14px 0 18px'}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280,flex:'1 1 320px'}}>Buscar estudiante por nombre o cédula
+            <input type="search" placeholder="Escribe el nombre o número de identificación" value={bienestarSearch} onChange={e=>setBienestarSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9,width:'100%'}}/>
+          </label>
+          <button className="refresh" onClick={()=>setBienestarSearch('')} disabled={!bienestarSearch}>Limpiar búsqueda</button>
+          <span className="muted">{visibleBienestarRows.length} de {bienestarRows.length} estudiantes</span>
+        </div>
         <div className="status-cards">
           {['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(s=>{
-            const n=bienestarRows.filter(r=>(r.estadoBienestar||'Sin seguimiento')===s).length
+            const n=visibleBienestarRows.filter(r=>(r.estadoBienestar||'Sin seguimiento')===s).length
             return <div className="mini-card" key={s}><b>{n}</b><span>{s}</span></div>
           })}
         </div>
         {followupError&&<div className="banner danger">{followupError}</div>}
         {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{margin:"16px 0",border:"2px solid #8e72de"}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<button className="refresh" onClick={()=>setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}>Editar seguimiento</button>:'Solo lectura'}]} rows={bienestarRows}/>
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<button className="refresh" onClick={()=>setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}>Editar seguimiento</button>:'Solo lectura'} ]} rows={visibleBienestarRows}/>
 
       </section>}
 
