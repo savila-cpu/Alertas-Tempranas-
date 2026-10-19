@@ -640,13 +640,13 @@ function Dashboard({profile}){
       </section>}
 
       {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Todos los estudiantes del filtro seleccionado, con o sin alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:12,alignItems:'end',margin:'14px 0 18px'}}>
-          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280,flex:'1 1 320px'}}>Buscar estudiante por nombre o cédula
-            <input type="search" placeholder="Escribe el nombre o número de identificación" value={bienestarSearch} onChange={e=>setBienestarSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9,width:'100%'}}/>
+        <div style={{display:'flex',flexWrap:'wrap',gap:14,alignItems:'end',marginBottom:18}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:250}}>Buscar estudiante
+            <input type="search" placeholder="Nombre o identificación" value={bienestarSearch} onChange={e=>setBienestarSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
           </label>
-          <button className="refresh" onClick={()=>setBienestarSearch('')} disabled={!bienestarSearch}>Limpiar búsqueda</button>
-          <span className="muted">{visibleBienestarRows.length} de {bienestarRows.length} estudiantes</span>
+          <button className="refresh" onClick={()=>setBienestarSearch('')}>Limpiar búsqueda</button>
         </div>
+        <p className="muted">{visibleBienestarRows.length} estudiantes en el listado · {bienestarRows.length} estudiantes en la selección</p>
         <div className="status-cards">
           {['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(s=>{
             const n=visibleBienestarRows.filter(r=>(r.estadoBienestar||'Sin seguimiento')===s).length
