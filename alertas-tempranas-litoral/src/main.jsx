@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   LogOut, Users, LayoutDashboard, ShieldCheck, GraduationCap,
@@ -427,6 +427,9 @@ function Dashboard({profile}){
   const [followupError,setFollowupError]=useState('')
   const [editingFollowup,setEditingFollowup]=useState(null)
   const [savingFollowup,setSavingFollowup]=useState(false)
+  const [deletingFollowup,setDeletingFollowup]=useState('')
+  const [followupNotice,setFollowupNotice]=useState('')
+  const deleteFollowupLock=useRef(false)
   const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
   const [studentStatus,setStudentStatus]=useState('todos')
   const [studentSearch,setStudentSearch]=useState('')
@@ -467,8 +470,8 @@ function Dashboard({profile}){
   function followupKey(r){return String(r.documento||r.estudiante||'').trim()}
   async function saveFollowup(e){
     e.preventDefault()
-    if(!editingFollowup||!canEditFollowups)return
-    setSavingFollowup(true);setFollowupError('')
+    if(!editingFollowup||!canEditFollowups||deleteFollowupLock.current)return
+    setSavingFollowup(true);setFollowupError('');setFollowupNotice('')
     const payload={student_key:editingFollowup.key,estado:editingFollowup.estado,observaciones:editingFollowup.observaciones,updated_by:profile.id,updated_at:new Date().toISOString()}
     const {error}=await supabase.from('student_followups').upsert(payload,{onConflict:'student_key'})
     setSavingFollowup(false)
@@ -476,6 +479,54 @@ function Dashboard({profile}){
     setFollowups(old=>({...old,[payload.student_key]:payload}))
     setEditingFollowup(null)
   }
+
+  async function deleteFollowup(row){
+    // Solo se elimina el seguimiento guardado de este estudiante, nunca notas o matrículas.
+    const key=followupKey(row)
+    if(!canEditFollowups||savingFollowup||deleteFollowupLock.current||!key)return
+    if(!Object.prototype.hasOwnProperty.call(followups,key))return
+    deleteFollowupLock.current=true
+    setDeletingFollowup(key);setFollowupError('');setFollowupNotice('')
+    try{
+      const {data:saved,error:readError}=await supabase
+        .from('student_followups')
+        .select('student_key,estado,observaciones,updated_at')
+        .eq('student_key',key)
+        .maybeSingle()
+      if(readError)throw readError
+      if(!saved)throw new Error('No se encontró un seguimiento guardado. Recarga la página para actualizar el listado.')
+      const confirmed=window.confirm(
+        `¿Eliminar el seguimiento de ${row.estudiante||'este estudiante'}?\nIdentificación: ${key}\nEstado guardado: ${saved.estado}\n\nSe eliminarán el estado y las observaciones guardados en el tablero. Esta acción no se puede deshacer desde el panel.\n\nEl estudiante, sus notas y los datos de Google Sheets NO se eliminarán.`
+      )
+      if(!confirmed)return
+      // La fecha impide borrar una versión que otra persona haya modificado mientras se confirma.
+      let request=supabase.from('student_followups').delete().eq('student_key',key)
+      request=saved.updated_at===null
+        ? request.is('updated_at',null)
+        : request.eq('updated_at',saved.updated_at)
+      const {data:deleted,error}=await request.select('student_key')
+      if(error)throw error
+      if(!Array.isArray(deleted)||deleted.length!==1||deleted[0].student_key!==key){
+        throw new Error('No se eliminó ningún seguimiento. Puede que el registro haya cambiado o falte habilitar el permiso de eliminación en Supabase. Recarga el listado antes de reintentar.')
+      }
+      setFollowups(previous=>{
+        const next={...previous}
+        delete next[key]
+        return next
+      })
+      setEditingFollowup(previous=>previous?.key===key?null:previous)
+      setFollowupNotice('Seguimiento eliminado correctamente. El estudiante y sus notas se conservan. Cualquier dato de seguimiento de la hoja de origen permanece sin cambios.')
+    }catch(error){
+      const detail=error?.code==='42501'
+        ? 'Falta permiso para eliminar seguimientos. Verifica la política de eliminación en Supabase.'
+        : String(error?.message||'No se pudo completar la eliminación.')
+      setFollowupError('No se pudo eliminar: '+detail)
+    }finally{
+      deleteFollowupLock.current=false
+      setDeletingFollowup('')
+    }
+  }
+
   async function logout(){await supabase.auth.signOut()}
 
   const programCode=value=>String(value||'').trim().match(/^[0-9]{5,6}(?=[ ]*[-–])/u)?.[0]||''
@@ -653,9 +704,13 @@ function Dashboard({profile}){
             return <div className="mini-card" key={s}><b>{n}</b><span>{s}</span></div>
           })}
         </div>
-        {followupError&&<div className="banner danger">{followupError}</div>}
-        {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{margin:"16px 0",border:"2px solid #8e72de"}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<button className="refresh" onClick={()=>setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}>Editar seguimiento</button>:'Solo lectura'} ]} rows={visibleBienestarRows}/>
+        {followupNotice&&<div className="banner info" role="status">{followupNotice}</div>}
+        {followupError&&<div className="banner danger" role="alert">{followupError}</div>}
+        {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{margin:"16px 0",border:"2px solid #8e72de"}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||Boolean(deletingFollowup)||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" disabled={Boolean(deletingFollowup)} onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<div className="user-actions">
+          <button type="button" className="refresh" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>{setFollowupNotice('');setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}}>Editar seguimiento</button>
+          {Object.prototype.hasOwnProperty.call(followups,followupKey(r))&&<button type="button" className="ghost small danger-action" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>deleteFollowup(r)} aria-label={'Eliminar seguimiento de '+r.estudiante}>{deletingFollowup===followupKey(r)?'Eliminando…':'Eliminar seguimiento'}</button>}
+        </div>:'Solo lectura'} ]} rows={visibleBienestarRows}/>
 
       </section>}
 
