@@ -6,6 +6,7 @@ import {
   AlertTriangle, FileDown, Search, UserRound, ChevronDown
 } from 'lucide-react'
 import { supabase } from './supabase'
+import FollowupHistoryButton from './FollowupHistory'
 import './styles.css'
 
 const SHEET_ID = '1LC9xS0TyExB9Foy7UWqwV1CNcbJ2kE8gQxRq4gzmMoc'
@@ -109,7 +110,7 @@ function normalizeRecord(row){
   const periodo=pickFuzzy(row,['Nombre_periodo','periodo'],[['nombre','periodo'],['periodo']])||'2026-2'
 
   const porcentajeRaw=pickFuzzy(row,
-    ['Porcentaje_evaluado','porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
+    ['Porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
     [['porcentaje','evalu'],['porcentaje']]
   )
   const promedioRaw=pickFuzzy(row,
@@ -496,7 +497,7 @@ function Dashboard({profile}){
       if(readError)throw readError
       if(!saved)throw new Error('No se encontró un seguimiento guardado. Recarga la página para actualizar el listado.')
       const confirmed=window.confirm(
-        `¿Eliminar el seguimiento de ${row.estudiante||'este estudiante'}?\nIdentificación: ${key}\nEstado guardado: ${saved.estado}\n\nSe eliminarán el estado y las observaciones guardados en el tablero. Esta acción no se puede deshacer desde el panel.\n\nEl estudiante, sus notas y los datos de Google Sheets NO se eliminarán.`
+        `¿Eliminar el seguimiento de ${row.estudiante||'este estudiante'}?\nIdentificación: ${key}\nEstado guardado: ${saved.estado}\n\nSe eliminarán el estado y las observaciones del seguimiento actual. Esta acción no se puede deshacer desde el panel. Una vez habilitado el historial en Supabase, se conserva allí el registro de esta eliminación.\n\nEl estudiante, sus notas y los datos de Google Sheets NO se eliminarán.`
       )
       if(!confirmed)return
       // La fecha impide borrar una versión que otra persona haya modificado mientras se confirma.
@@ -675,7 +676,7 @@ function Dashboard({profile}){
           <button className="refresh" onClick={()=>{setStudentStatus('todos');setStudentSearch('')}}>Limpiar búsqueda</button>
         </div>
         <p className="muted">{visibleStudentRows.length} estudiantes en el listado · {studentRows.length} estudiantes en la selección · {studentRows.filter(r=>r.asignaturasPerdidas>0).length} con asignaturas perdidas</p>
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'documento',label:'Identificación'},{key:'programa',label:'Programa'},{key:'modalidad',label:'Modalidad'},{key:'asignaturasPerdidas',label:'Asignaturas perdidas',render:r=><span className={r.asignaturasPerdidas?'pill red':'pill'}>{r.tieneReporte?r.asignaturasPerdidas:'Sin evaluar'}</span>},{key:'detallePerdidas',label:'Detalle de asignaturas perdidas',render:r=>r.detallePerdidas||'—'}]} rows={visibleStudentRows}/>
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'documento',label:'Identificación'},{key:'programa',label:'Programa'},{key:'modalidad',label:'Modalidad'},{key:'asignaturasPerdidas',label:'Asignaturas perdidas',render:r=><span className={r.asignaturasPerdidas?'pill red':'pill'}>{r.tieneReporte?r.asignaturasPerdidas:'Sin evaluar'}</span>},{key:'detallePerdidas',label:'Detalle de asignaturas perdidas',render:r=>r.detallePerdidas||'—'},{key:'historial',label:'Perfil / historial',render:r=><FollowupHistoryButton key={followupKey(r)} student={r} disabled={savingFollowup||Boolean(deletingFollowup)}/>}]} rows={visibleStudentRows}/>
       </section>}
 
       {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado de todos los estudiantes registrados, incluidos los que no presentan alerta.</p></div></div>
@@ -707,7 +708,7 @@ function Dashboard({profile}){
         {followupNotice&&<div className="banner info" role="status">{followupNotice}</div>}
         {followupError&&<div className="banner danger" role="alert">{followupError}</div>}
         {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{margin:"16px 0",border:"2px solid #8e72de"}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||Boolean(deletingFollowup)||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" disabled={Boolean(deletingFollowup)} onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<div className="user-actions">
+        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'historial',label:'Historial',render:r=><FollowupHistoryButton key={followupKey(r)} student={r} disabled={savingFollowup||Boolean(deletingFollowup)}/>},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<div className="user-actions">
           <button type="button" className="refresh" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>{setFollowupNotice('');setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}}>Editar seguimiento</button>
           {Object.prototype.hasOwnProperty.call(followups,followupKey(r))&&<button type="button" className="ghost small danger-action" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>deleteFollowup(r)} aria-label={'Eliminar seguimiento de '+r.estudiante}>{deletingFollowup===followupKey(r)?'Eliminando…':'Eliminar seguimiento'}</button>}
         </div>:'Solo lectura'} ]} rows={visibleBienestarRows}/>
