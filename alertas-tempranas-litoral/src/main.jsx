@@ -747,7 +747,18 @@ function Dashboard({profile}){
           <div className="section-head"><div><h2>Docentes con notas pendientes</h2><p className="muted">Cantidad de registros con cargue incompleto por docente, según los filtros actuales.</p></div></div>
           <SimpleTable columns={[
             {key:'docente',label:'Docente'},
-            {key:'pendientes',label:'Notas pendientes',render:r=><span className="pill red">{r.pendientes}</span>}
+            {key:'pendientes',label:'Notas pendientes',render:r=><span className="pill red">{r.pendientes}</span>},
+            {key:'detalle',label:'Detalle',render:r=><button
+              type="button"
+              className="refresh"
+              onClick={()=>{
+                setPendingProgram('')
+                setPendingTeacher(r.docente==='Sin docente'?'':r.docente)
+                setPendingNotesSearch('')
+                setTab('notas-pendientes')
+                window.scrollTo({top:0,behavior:'smooth'})
+              }}
+            >Ver notas pendientes</button>}
           ]} rows={pendingTeacherSummary}/>
         </section>
       </>}
