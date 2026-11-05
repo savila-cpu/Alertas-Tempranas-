@@ -475,6 +475,10 @@ function Dashboard({profile}){
   const [pendingNotesSearch,setPendingNotesSearch]=useState('')
   const [pendingProgram,setPendingProgram]=useState('')
   const [pendingTeacher,setPendingTeacher]=useState('')
+  const [riskChartModality,setRiskChartModality]=useState('')
+  const [riskChartBlock,setRiskChartBlock]=useState('')
+  const [riskChartMetric,setRiskChartMetric]=useState('pct')
+  const [riskChartHover,setRiskChartHover]=useState(null)
 
   async function loadData(){
     setLoading(true);setDataError('')
@@ -592,13 +596,38 @@ function Dashboard({profile}){
   const riskRows=reportable.filter(r=>r.enRiesgo)
   const riskPct=uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0
   const topRiskPrograms=[...programRows].sort((a,b)=>b.risk-a.risk).slice(0,6)
-  const cutStats=Object.values(reportable.reduce((acc,r)=>{
-    const key=[r.bloque||'Sin bloque',r.corte||'Sin corte'].join(' · ')
-    if(!acc[key]) acc[key]={name:key,students:new Set(),risk:new Set()}
+  const riskChartRows=reportable.filter(r=>{
+    if(riskChartModality && normalize(r.modalidad)!==normalize(riskChartModality))return false
+    if(riskChartBlock && String(r.bloque||'').trim()!==riskChartBlock)return false
+    return true
+  })
+  const cutStats=Object.values(riskChartRows.reduce((acc,r)=>{
+    const virtual=normalize(r.modalidad).includes('virtual')
+    const modalityLabel=virtual?'Virtual':'Presencial'
+    const blockLabel=virtual?(r.bloque||'Sin bloque'):''
+    const cutLabel=r.corte||'Sin corte'
+    const key=[modalityLabel,blockLabel,cutLabel].join('||')
+    if(!acc[key]) acc[key]={modalidad:modalityLabel,bloque:blockLabel,corte:cutLabel,students:new Set(),risk:new Set()}
     const id=r.documento||r.estudiante
     if(id){acc[key].students.add(id);if(r.enRiesgo)acc[key].risk.add(id)}
     return acc
-  },{})).map(x=>({name:x.name,total:x.students.size,risk:x.risk.size,pct:x.students.size?Math.round(x.risk.size/x.students.size*100):0})).sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true}))
+  },{})).map(x=>({
+    ...x,
+    name:x.modalidad==='Virtual'?('B'+x.bloque+' · C'+x.corte):('Corte '+x.corte),
+    fullName:x.modalidad==='Virtual'?('Virtual · Bloque '+x.bloque+' · Corte '+x.corte):('Presencial · Corte '+x.corte),
+    total:x.students.size,
+    risk:x.risk.size,
+    pct:x.students.size?Math.round(x.risk.size/x.students.size*100):0
+  })).sort((a,b)=>{
+    const ma=a.modalidad==='Presencial'?0:1, mb=b.modalidad==='Presencial'?0:1
+    if(ma!==mb)return ma-mb
+    const ba=Number(a.bloque||0), bb=Number(b.bloque||0)
+    if(ba!==bb)return ba-bb
+    return Number(a.corte||0)-Number(b.corte||0)
+  })
+  const riskChartBlocks=[...new Set(reportable.filter(r=>normalize(r.modalidad).includes('virtual')).map(r=>String(r.bloque||'').trim()).filter(Boolean))].sort((a,b)=>Number(a)-Number(b))
+  const riskChartMax=Math.max(1,...cutStats.map(x=>riskChartMetric==='pct'?100:x.risk))
+  const riskChartDisplay=riskChartHover!==null?cutStats[riskChartHover]:null
 
 
   const studentRows=Object.values(filtered.reduce((acc,r)=>{
@@ -766,8 +795,49 @@ function Dashboard({profile}){
             <div className="donut-layout"><div className="risk-donut" style={{background:`conic-gradient(#9279e5 0 ${riskPct}%, #eae6f4 ${riskPct}% 100%)`}}><div><strong>{riskPct}%</strong><span>En riesgo</span></div></div><div className="donut-legend"><div><i style={{background:'#9279e5'}}/>En riesgo <strong>{riskStudents.size}</strong></div><div><i style={{background:'#eae6f4'}}/>Sin alerta <strong>{Math.max(0,uniqueStudents.size-riskStudents.size)}</strong></div></div></div>
           </section>
           <section className="card page-card analytics-card analytics-wide">
-            <div className="section-head"><div><h2>Riesgo por bloque y corte</h2><p className="muted">Porcentaje de estudiantes únicos en riesgo en cada grupo · no representa evolución temporal individual</p></div></div>
-            {cutStats.length?<div className="cut-chart">{cutStats.map(x=><div className="cut-row" key={x.name}><span title={x.name}>{x.name}</span><div className="cut-track"><div style={{width:`${x.pct}%`}}/></div><strong>{x.pct}%</strong><small>{x.risk} de {x.total}</small></div>)}</div>:<p className="muted">No hay cortes con información reportable.</p>}
+            <div className="section-head risk-chart-head">
+              <div><h2>Riesgo por bloque y corte</h2><p className="muted">Comparativo interactivo de estudiantes únicos en riesgo. Usa los filtros para explorar cada grupo.</p></div>
+              <div className="risk-chart-controls">
+                <label>Modalidad
+                  <select value={riskChartModality} onChange={e=>{setRiskChartModality(e.target.value);setRiskChartBlock('');setRiskChartHover(null)}}>
+                    <option value="">Todas</option><option value="Presencial">Presencial</option><option value="Virtual">Virtual</option>
+                  </select>
+                </label>
+                <label>Bloque
+                  <select value={riskChartBlock} disabled={riskChartModality==='Presencial'} onChange={e=>{setRiskChartBlock(e.target.value);setRiskChartHover(null)}}>
+                    <option value="">Todos</option>{riskChartBlocks.map(b=><option key={b} value={b}>Bloque {b}</option>)}
+                  </select>
+                </label>
+                <label>Variable
+                  <select value={riskChartMetric} onChange={e=>{setRiskChartMetric(e.target.value);setRiskChartHover(null)}}>
+                    <option value="pct">% en riesgo</option><option value="risk">Estudiantes en riesgo</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            {cutStats.length?<div className="risk-line-wrap">
+              <div className="risk-line-chart">
+                <svg viewBox="0 0 920 300" role="img" aria-label="Gráfico de riesgo por bloque y corte">
+                  {[0,25,50,75,100].map((tick,idx)=>{
+                    const y=250-(idx*52)
+                    const value=riskChartMetric==='pct'?tick:Math.round(riskChartMax*idx/4)
+                    return <g key={tick}><line x1="70" y1={y} x2="890" y2={y} className="risk-grid-line"/><text x="58" y={y+4} textAnchor="end" className="risk-axis-label">{value}{riskChartMetric==='pct'?'%':''}</text></g>
+                  })}
+                  {cutStats.length>1&&<polyline points={cutStats.map((x,i)=>{const px=95+i*(770/Math.max(1,cutStats.length-1));const value=riskChartMetric==='pct'?x.pct:x.risk;const py=250-(value/riskChartMax)*208;return px+','+py}).join(' ')} className="risk-line"/>}
+                  {cutStats.map((x,i)=>{
+                    const px=cutStats.length===1?480:95+i*(770/Math.max(1,cutStats.length-1))
+                    const value=riskChartMetric==='pct'?x.pct:x.risk
+                    const py=250-(value/riskChartMax)*208
+                    return <g key={x.fullName} className="risk-point-group" onMouseEnter={()=>setRiskChartHover(i)} onMouseLeave={()=>setRiskChartHover(null)} onClick={()=>setRiskChartHover(i)}>
+                      <circle cx={px} cy={py} r="8" className="risk-point"/>
+                      <text x={px} y="278" textAnchor="middle" className="risk-x-label">{x.name}</text>
+                    </g>
+                  })}
+                </svg>
+                {riskChartDisplay&&<div className="risk-tooltip"><strong>{riskChartDisplay.fullName}</strong><span><b>{riskChartDisplay.pct}%</b> en riesgo</span><span>{riskChartDisplay.risk} de {riskChartDisplay.total} estudiantes</span></div>}
+              </div>
+              <div className="risk-chart-legend"><span><i/> {riskChartMetric==='pct'?'Porcentaje en riesgo':'Estudiantes en riesgo'}</span><small>Pasa el cursor o pulsa un punto para ver el detalle.</small></div>
+            </div>:<p className="muted">No hay cortes con información reportable para los filtros seleccionados.</p>}
           </section>
         </div>
         <div className="two-col">
