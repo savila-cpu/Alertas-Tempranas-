@@ -565,6 +565,7 @@ function Dashboard({profile}){
     return String(r[k]||'').trim()===String(v).trim()
   })),[data,filters])
   const reportable=filtered.filter(r=>!r.sinReporte)
+  const totalStudents=new Set(filtered.map(r=>r.documento||r.estudiante).filter(Boolean))
   const uniqueStudents=new Set(reportable.map(r=>r.documento||r.estudiante).filter(Boolean))
   const riskStudents=new Set(reportable.filter(r=>r.enRiesgo).map(r=>r.documento||r.estudiante).filter(Boolean))
   const programs=new Set(reportable.map(r=>r.programa).filter(Boolean))
@@ -653,7 +654,7 @@ function Dashboard({profile}){
       {tab==='inicio'&&<>
         <div className="page-title"><div><h1>Panel de Alertas Tempranas</h1><p>Seguimiento académico · Periodo {filters.periodo||'Todos'}</p></div><button className="refresh" onClick={loadData}><RefreshCw size={17}/>Actualizar</button></div>
         <div className="stats">
-          <div className="card stat"><span>Estudiantes</span><strong>{uniqueStudents.size}</strong><small>con información reportable</small></div>
+          <div className="card stat"><span>Estudiantes</span><strong>{totalStudents.size}</strong><small>estudiantes únicos en el filtro actual</small></div>
           <div className="card stat risk"><span>En riesgo</span><strong>{riskStudents.size}</strong><small>{uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0}% de estudiantes</small></div>
           <div className="card stat"><span>Programas</span><strong>{programs.size}</strong><small>en el filtro actual</small></div>
           <div className="card stat"><span>Registros</span><strong>{reportable.length}</strong><small>{filtered.length-reportable.length} sin evaluación reportada</small></div>
