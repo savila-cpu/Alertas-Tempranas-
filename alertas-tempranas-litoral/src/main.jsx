@@ -483,6 +483,9 @@ function Dashboard({profile}){
   const [studentStatus,setStudentStatus]=useState('todos')
   const [studentSearch,setStudentSearch]=useState('')
   const [studentSort,setStudentSort]=useState('alfabetico')
+  const [programSort,setProgramSort]=useState('riesgo_desc')
+  const [teacherSort,setTeacherSort]=useState('riesgo_desc')
+  const [subjectSort,setSubjectSort]=useState('riesgo_desc')
   const [bienestarSearch,setBienestarSearch]=useState('')
   const [pendingNotesSearch,setPendingNotesSearch]=useState('')
   const [pendingProgram,setPendingProgram]=useState('')
@@ -616,6 +619,15 @@ function Dashboard({profile}){
   },{})).map(r=>({...r,asignaturasEnRiesgo:r.subjects.size}))
     .sort((a,b)=>b.asignaturasEnRiesgo-a.asignaturasEnRiesgo || String(a.estudiante).localeCompare(String(b.estudiante),'es'))
   const riskPct=uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0
+  const sortedProgramRows=[...programRows].sort((a,b)=>programSort==='alfabetico'
+    ?String(a.name).localeCompare(String(b.name),'es')
+    :b.risk-a.risk || String(a.name).localeCompare(String(b.name),'es'))
+  const sortedTeacherRows=[...teacherRows].sort((a,b)=>teacherSort==='alfabetico'
+    ?String(a.name).localeCompare(String(b.name),'es')
+    :b.risk-a.risk || String(a.name).localeCompare(String(b.name),'es'))
+  const sortedSubjectRows=[...subjectRows].sort((a,b)=>subjectSort==='alfabetico'
+    ?String(a.name).localeCompare(String(b.name),'es')
+    :b.riskStudents-a.riskStudents || String(a.name).localeCompare(String(b.name),'es'))
   const topRiskPrograms=[...programRows].sort((a,b)=>b.risk-a.risk).slice(0,6)
   const riskChartRows=reportable.filter(r=>{
     if(riskChartModality && normalize(r.modalidad)!==normalize(riskChartModality))return false
@@ -925,15 +937,39 @@ function Dashboard({profile}){
       </section>}
 
       {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado de todos los estudiantes registrados, incluidos los que no presentan alerta.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
+        <div style={{display:'flex',gap:14,alignItems:'end',marginBottom:18,flexWrap:'wrap'}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Ordenar por
+            <select value={programSort} onChange={e=>setProgramSort(e.target.value)}>
+              <option value="riesgo_desc">Mayor a menor estudiantes en riesgo</option>
+              <option value="alfabetico">Orden alfabético</option>
+            </select>
+          </label>
+        </div>
+        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><b>{r.pct}%</b>}]} rows={sortedProgramRows}/>
       </section>}
 
       {tab==='docentes'&&<section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Total de estudiantes atendidos y relación de pérdida.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={teacherRows}/>
+        <div style={{display:'flex',gap:14,alignItems:'end',marginBottom:18,flexWrap:'wrap'}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Ordenar por
+            <select value={teacherSort} onChange={e=>setTeacherSort(e.target.value)}>
+              <option value="riesgo_desc">Mayor a menor estudiantes en riesgo</option>
+              <option value="alfabetico">Orden alfabético</option>
+            </select>
+          </label>
+        </div>
+        <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={sortedTeacherRows}/>
       </section>}
 
-      {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Listado de mayor a menor pérdida. Se agrupan denominaciones idénticas y equivalencias académicas definidas, sin modificar los datos originales.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Asignatura agrupada'},{key:'variants',label:'Denominaciones incluidas'},{key:'students',label:'Estudiantes matriculados'},{key:'riskStudents',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo'}]} rows={subjectRows}/>
+      {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Listado de asignaturas agrupadas según equivalencias académicas definidas.</p></div></div>
+        <div style={{display:'flex',gap:14,alignItems:'end',marginBottom:18,flexWrap:'wrap'}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Ordenar por
+            <select value={subjectSort} onChange={e=>setSubjectSort(e.target.value)}>
+              <option value="riesgo_desc">Mayor a menor estudiantes en riesgo</option>
+              <option value="alfabetico">Orden alfabético</option>
+            </select>
+          </label>
+        </div>
+        <SimpleTable columns={[{key:'name',label:'Asignatura agrupada'},{key:'variants',label:'Denominaciones incluidas'},{key:'students',label:'Estudiantes matriculados'},{key:'riskStudents',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo'}]} rows={sortedSubjectRows}/>
       </section>}
 
       {tab==='notas-pendientes'&&<section className="card page-card">
