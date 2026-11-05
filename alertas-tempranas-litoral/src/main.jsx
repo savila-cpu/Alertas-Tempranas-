@@ -310,6 +310,9 @@ function ForcePasswordChange({user,onDone,isRecovery=false}){
 function AdminUsers(){
   const [email,setEmail]=useState(''),[name,setName]=useState(''),[role,setRole]=useState('viewer')
   const [msg,setMsg]=useState(''),[busy,setBusy]=useState(false),[users,setUsers]=useState([]),[loading,setLoading]=useState(true),[actionBusy,setActionBusy]=useState('')
+  const [bulkRows,setBulkRows]=useState([])
+  const [bulkBusy,setBulkBusy]=useState(false)
+  const [bulkMsg,setBulkMsg]=useState('')
 
   async function callAdmin(body){
     const {data,error}=await supabase.functions.invoke('create-user',{body})
@@ -365,6 +368,50 @@ function AdminUsers(){
     catch(err){setMsg(String(err?.message||err))}
     finally{setActionBusy('')}
   }
+  function loadBulkFile(e){
+    const file=e.target.files?.[0]
+    e.target.value=''
+    if(!file)return
+    setBulkMsg('')
+    const reader=new FileReader()
+    reader.onload=()=>{
+      try{
+        const parsed=parseCSV(String(reader.result||''))
+        const rows=parsed.map(r=>({
+          name:String(r.nombre||r.name||'').trim(),
+          email:String(r.correo||r.email||'').trim(),
+          teacherName:String(r.docente||r.teacher_name||r.teacher||r.nombre||'').trim()
+        })).filter(r=>r.name||r.email||r.teacherName)
+        if(!rows.length)throw new Error('No se encontraron filas. Usa las columnas Nombre, Correo y Docente.')
+        setBulkRows(rows)
+      }catch(err){setBulkRows([]);setBulkMsg(String(err?.message||err))}
+    }
+    reader.readAsText(file,'utf-8')
+  }
+  function downloadTeacherTemplate(){
+    const csv='Nombre,Correo,Docente\nNombre del profesor,correo@litoral.edu.co,Nombre exacto como aparece en la columna Docente'
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'})
+    const a=document.createElement('a')
+    a.href=URL.createObjectURL(blob)
+    a.download='plantilla_usuarios_docentes.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  async function createBulkTeachers(){
+    if(!bulkRows.length||bulkBusy)return
+    setBulkBusy(true);setBulkMsg('')
+    try{
+      const {data,error}=await supabase.functions.invoke('bulk-create-teachers',{
+        body:{users:bulkRows,redirectTo:window.location.origin}
+      })
+      if(error)throw error
+      if(data?.error)throw new Error(data.error)
+      setBulkMsg(`Cargue finalizado: ${data?.created||0} usuarios creados y ${data?.failed||0} con novedad.`)
+      if((data?.created||0)>0){setBulkRows([]);await loadUsers()}
+    }catch(err){
+      setBulkMsg('No se pudo completar el cargue masivo: '+String(err?.message||err))
+    }finally{setBulkBusy(false)}
+  }
   function status(u){if(u.disabled)return {label:'Desactivado',cls:'off'};if(u.must_change_password)return {label:'Pendiente de activación',cls:'pending'};if(u.last_sign_in_at)return {label:'Activo',cls:'on'};return {label:'Invitado',cls:'invited'}}
 
   return <div className="admin-stack">
@@ -380,12 +427,27 @@ function AdminUsers(){
       {msg&&<p className="notice">{msg}</p>}
     </section>
     <section className="card page-card">
+      <div className="section-head"><div><h2>Cargue masivo de docentes</h2><p className="muted">Importa un CSV con Nombre, Correo y Docente. El campo Docente debe coincidir con el nombre usado en la fuente académica.</p></div><Users/></div>
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:14}}>
+        <button type="button" className="refresh" onClick={downloadTeacherTemplate}><FileDown size={16}/>Descargar plantilla</button>
+        <label className="primary inline" style={{cursor:'pointer'}}>Seleccionar CSV<input type="file" accept=".csv,text/csv" onChange={loadBulkFile} style={{display:'none'}}/></label>
+        {bulkRows.length>0&&<button type="button" className="primary inline" onClick={createBulkTeachers} disabled={bulkBusy}>{bulkBusy?'Creando usuarios…':`Crear ${bulkRows.length} usuarios docentes`}</button>}
+        {bulkRows.length>0&&<button type="button" className="ghost small" onClick={()=>{setBulkRows([]);setBulkMsg('')}} disabled={bulkBusy}>Cancelar</button>}
+      </div>
+      {bulkRows.length>0&&<div style={{overflowX:'auto'}}>
+        <table className="data-table"><thead><tr><th>Nombre</th><th>Correo</th><th>Docente vinculado</th></tr></thead>
+        <tbody>{bulkRows.slice(0,20).map((u,i)=><tr key={i}><td>{u.name||'—'}</td><td>{u.email||'—'}</td><td>{u.teacherName||'—'}</td></tr>)}</tbody></table>
+        {bulkRows.length>20&&<p className="muted">Vista previa de 20 de {bulkRows.length} registros.</p>}
+      </div>}
+      {bulkMsg&&<p className="notice">{bulkMsg}</p>}
+    </section>
+    <section className="card page-card">
       <div className="section-head"><div><h2>Usuarios registrados</h2><p className="muted">Administra roles y accesos sin entrar a Supabase.</p></div><button className="refresh" onClick={loadUsers} disabled={loading}><RefreshCw size={16}/>{loading?'Actualizando…':'Actualizar'}</button></div>
       <div style={{overflowX:'auto'}}>
         <table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th>Acciones</th></tr></thead>
         <tbody>{users.map(u=><tr key={u.id}>
           <td><strong>{u.full_name||'Sin nombre'}</strong><div className="muted user-email">{u.email}</div></td>
-          <td><select className="role-select" value={u.role} disabled={actionBusy===u.id+'role'} onChange={e=>changeRole(u.id,e.target.value)}><option value="viewer">Consulta</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></td>
+          <td><select className="role-select" value={u.role} disabled={actionBusy===u.id+'role'} onChange={e=>changeRole(u.id,e.target.value)}><option value="viewer">Consulta</option><option value="docente">Docente</option><option value="bienestar">Bienestar</option><option value="coordinator">Coordinación</option><option value="admin">Administrador</option></select></td>
           <td><span className={'status-badge '+status(u).cls}>{status(u).label}</span></td>
           <td>{u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString('es-CO'):'—'}</td>
           <td><div className="user-actions"><button className="ghost small" disabled={actionBusy===u.id+'reset'} onClick={()=>resetAccess(u)}>Restablecer acceso</button><button className={'ghost small '+(u.disabled?'success-action':'danger-action')} disabled={actionBusy===u.id+'access'} onClick={()=>toggleAccess(u)}>{u.disabled?'Reactivar':'Desactivar'}</button></div></td>
@@ -525,6 +587,9 @@ function Dashboard({profile}){
   const [savingFollowup,setSavingFollowup]=useState(false)
   const [deletingFollowup,setDeletingFollowup]=useState('')
   const [followupNotice,setFollowupNotice]=useState('')
+  const [teacherObservations,setTeacherObservations]=useState({})
+  const [editingTeacherObservation,setEditingTeacherObservation]=useState(null)
+  const [savingTeacherObservation,setSavingTeacherObservation]=useState(false)
   const deleteFollowupLock=useRef(false)
   const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
   const [studentStatus,setStudentStatus]=useState('todos')
@@ -574,7 +639,18 @@ function Dashboard({profile}){
     setFollowups(Object.fromEntries((rows||[]).map(r=>[r.student_key,r])))
   }
   useEffect(()=>{loadFollowups()},[])
+  async function loadTeacherObservations(){
+    const {data:rows,error}=await supabase.from('teacher_student_observations').select('teacher_id,student_key,observations,updated_at')
+    if(error){
+      if(profile?.role==='docente')setFollowupError('No se pudieron consultar las observaciones docentes: '+error.message)
+      return
+    }
+    const own=(rows||[]).filter(r=>profile?.role!=='docente'||r.teacher_id===profile?.id)
+    setTeacherObservations(Object.fromEntries(own.map(r=>[r.student_key,r])))
+  }
+  useEffect(()=>{loadTeacherObservations()},[profile?.id,profile?.role])
   const canEditFollowups=['admin','bienestar','coordinator'].includes(profile?.role)
+  const canEditTeacherObservations=profile?.role==='docente'
   function followupKey(r){return String(r.documento||r.estudiante||'').trim()}
   async function saveFollowup(e){
     e.preventDefault()
@@ -586,6 +662,24 @@ function Dashboard({profile}){
     if(error){setFollowupError('No se pudo guardar: '+error.message);return}
     setFollowups(old=>({...old,[payload.student_key]:payload}))
     setEditingFollowup(null)
+  }
+
+  async function saveTeacherObservation(e){
+    e.preventDefault()
+    if(!editingTeacherObservation||!canEditTeacherObservations||savingTeacherObservation)return
+    setSavingTeacherObservation(true);setFollowupError('');setFollowupNotice('')
+    const payload={
+      teacher_id:profile.id,
+      student_key:editingTeacherObservation.key,
+      observations:editingTeacherObservation.observations,
+      updated_at:new Date().toISOString()
+    }
+    const {error}=await supabase.from('teacher_student_observations').upsert(payload,{onConflict:'teacher_id,student_key'})
+    setSavingTeacherObservation(false)
+    if(error){setFollowupError('No se pudo guardar la observación: '+error.message);return}
+    setTeacherObservations(old=>({...old,[payload.student_key]:payload}))
+    setEditingTeacherObservation(null)
+    setFollowupNotice('Observación docente guardada correctamente.')
   }
 
   async function deleteFollowup(row){
@@ -638,7 +732,14 @@ function Dashboard({profile}){
   async function logout(){await supabase.auth.signOut()}
 
   const programCode=value=>String(value||'').trim().match(/^[0-9]{5,6}(?=[ ]*[-–])/u)?.[0]||''
-  const filtered=useMemo(()=>data.filter(r=>Object.entries(filters).every(([k,v])=>{
+  const scopedData=useMemo(()=>{
+    if(profile?.role!=='docente')return data
+    const teacherName=String(profile?.teacher_name||profile?.full_name||'').trim()
+    if(!teacherName)return []
+    return data.filter(r=>normalize(r.docente)===normalize(teacherName))
+  },[data,profile?.role,profile?.teacher_name,profile?.full_name])
+
+  const filtered=useMemo(()=>scopedData.filter(r=>Object.entries(filters).every(([k,v])=>{
     if(!v)return true
     if(k==='programa'){
       const selectedCode=programCode(v)
@@ -647,7 +748,7 @@ function Dashboard({profile}){
       return String(r.programa||'').trim()===String(v).trim()
     }
     return String(r[k]||'').trim()===String(v).trim()
-  })),[data,filters])
+  })),[scopedData,filters])
   const reportable=filtered.filter(r=>!r.sinReporte)
   const totalStudents=new Set(filtered.map(r=>r.documento||r.estudiante).filter(Boolean))
   const uniqueStudents=new Set(reportable.map(r=>r.documento||r.estudiante).filter(Boolean))
@@ -838,7 +939,7 @@ function Dashboard({profile}){
     if(r.asignatura) acc[key].subjects.add(r.asignatura)
     if(r.docente) acc[key].teachers.add(r.docente)
     return acc
-  },{})).map(r=>({...r,asignaturas:[...r.subjects].join(', '),docentes:[...r.teachers].join(', '),estadoBienestar:followups[followupKey(r)]?.estado||r.estadoBienestar||'Sin seguimiento',observaciones:followups[followupKey(r)]?.observaciones||r.observaciones||''}))
+  },{})).map(r=>({...r,asignaturas:[...r.subjects].join(', '),docentes:[...r.teachers].join(', '),estadoBienestar:followups[followupKey(r)]?.estado||r.estadoBienestar||'Sin seguimiento',observaciones:followups[followupKey(r)]?.observaciones||r.observaciones||'',observacionDocente:teacherObservations[followupKey(r)]?.observations||''}))
 
   const visibleBienestarRows=bienestarRows.filter(r=>{
     const query=normalize(bienestarSearch)
@@ -853,16 +954,24 @@ function Dashboard({profile}){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seguimiento-bienestar.csv';a.click();URL.revokeObjectURL(a.href)
   }
 
-  const menu=[
-    ['inicio','Inicio',LayoutDashboard],
-    ['estudiantes','Estudiantes',Users],
-    ['programas','Programas',GraduationCap],
-    ['docentes','Docentes',UserRound],
-    ['asignaturas','Asignaturas',BookOpen],
-    ['notas-pendientes','Notas pendientes',AlertTriangle],
-    ['bienestar','Bienestar',HeartHandshake],
-    ['fuente','Fuente de datos',Database]
-  ]
+  const menu=profile?.role==='docente'
+    ?[
+      ['inicio','Inicio',LayoutDashboard],
+      ['estudiantes','Estudiantes',Users],
+      ['asignaturas','Asignaturas',BookOpen],
+      ['notas-pendientes','Notas pendientes',AlertTriangle],
+      ['bienestar','Observaciones',HeartHandshake]
+    ]
+    :[
+      ['inicio','Inicio',LayoutDashboard],
+      ['estudiantes','Estudiantes',Users],
+      ['programas','Programas',GraduationCap],
+      ['docentes','Docentes',UserRound],
+      ['asignaturas','Asignaturas',BookOpen],
+      ['notas-pendientes','Notas pendientes',AlertTriangle],
+      ['bienestar','Bienestar',HeartHandshake],
+      ['fuente','Fuente de datos',Database]
+    ]
   if(profile?.role==='admin') menu.push(['usuarios','Usuarios',Users])
 
   return <div className="app-shell">
@@ -874,9 +983,10 @@ function Dashboard({profile}){
     </aside>
 
     <main>
-      {tab!=='usuarios'&&<FilterBar data={data} filters={filters} setFilters={setFilters}/>}
+      {tab!=='usuarios'&&<FilterBar data={scopedData} filters={filters} setFilters={setFilters}/>} 
       {loading&&<div className="banner info">Actualizando información desde Google Sheets…</div>}
       {dataError&&<div className="banner danger"><AlertTriangle size={18}/><span>{dataError} Verifica que la hoja permita acceso mediante enlace.</span><button onClick={loadData}>Reintentar</button></div>}
+      {profile?.role==='docente'&&!profile?.teacher_name&&<div className="banner danger"><AlertTriangle size={18}/><span>Tu usuario docente no tiene un profesor vinculado. Solicita al administrador asociar tu cuenta con el nombre usado en la columna Docente.</span></div>}
 
       {tab==='inicio'&&<>
         <div className="page-title"><div><h1>Panel de Alertas Tempranas</h1><p>Seguimiento académico · Periodo {filters.periodo||'Todos'}</p></div><button className="refresh" onClick={loadData}><RefreshCw size={17}/>Actualizar</button></div>
@@ -1125,7 +1235,7 @@ function Dashboard({profile}){
         ]} rows={visiblePendingNotesRows}/>
       </section>}
 
-      {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Todos los estudiantes del filtro seleccionado, con o sin alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
+      {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>{profile?.role==='docente'?'Observaciones de mis estudiantes':'Seguimiento de Bienestar'}</h1><p>{profile?.role==='docente'?'Consulta la información académica de tus estudiantes y registra únicamente tus observaciones.':'Todos los estudiantes del filtro seleccionado, con o sin alerta académica.'}</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
         <div style={{display:'flex',flexWrap:'wrap',gap:14,alignItems:'end',marginBottom:18}}>
           <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:250}}>Buscar estudiante
             <input type="search" placeholder="Nombre o identificación" value={bienestarSearch} onChange={e=>setBienestarSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
@@ -1142,10 +1252,30 @@ function Dashboard({profile}){
         {followupNotice&&<div className="banner info" role="status">{followupNotice}</div>}
         {followupError&&<div className="banner danger" role="alert">{followupError}</div>}
         {editingFollowup&&<form className="card page-card" onSubmit={saveFollowup} style={{margin:"16px 0",border:"2px solid #8e72de"}}><h2>Seguimiento: {editingFollowup.estudiante}</h2><label>Estado</label><select value={editingFollowup.estado} onChange={e=>setEditingFollowup(v=>({...v,estado:e.target.value}))}>{['Sin seguimiento','Contactado','No contactado','Sin respuesta','No interesado','Plan de mejoramiento acordado','En seguimiento','Remitido a coordinación','Caso cerrado'].map(x=><option key={x} value={x}>{x}</option>)}</select><label style={{display:'block',marginTop:12}}>Observaciones</label><textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingFollowup.observaciones} onChange={e=>setEditingFollowup(v=>({...v,observaciones:e.target.value}))}/><div style={{display:'flex',gap:10,marginTop:12}}><button className="primary inline" type="submit" disabled={savingFollowup||Boolean(deletingFollowup)||!editingFollowup.key}>{savingFollowup?'Guardando…':'Guardar seguimiento'}</button><button type="button" className="refresh" disabled={Boolean(deletingFollowup)} onClick={()=>setEditingFollowup(null)}>Cancelar</button></div></form>}
-        <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignaturas',label:'Asignaturas'},{key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},{key:'estadoBienestar',label:'Estado',render:r=>r.estadoBienestar||'Sin seguimiento'},{key:'observaciones',label:'Observaciones'},{key:'historial',label:'Historial',render:r=><FollowupHistoryButton key={followupKey(r)} student={r} disabled={savingFollowup||Boolean(deletingFollowup)}/>},{key:'acciones',label:'Acciones',render:r=>canEditFollowups?<div className="user-actions">
-          <button type="button" className="refresh" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>{setFollowupNotice('');setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}}>Editar seguimiento</button>
-          {Object.prototype.hasOwnProperty.call(followups,followupKey(r))&&<button type="button" className="ghost small danger-action" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>deleteFollowup(r)} aria-label={'Eliminar seguimiento de '+r.estudiante}>{deletingFollowup===followupKey(r)?'Eliminando…':'Eliminar seguimiento'}</button>}
-        </div>:'Solo lectura'} ]} rows={visibleBienestarRows}/>
+        {editingTeacherObservation&&<form className="card page-card" onSubmit={saveTeacherObservation} style={{margin:"16px 0",border:"2px solid #8e72de"}}>
+          <h2>Observación docente: {editingTeacherObservation.estudiante}</h2>
+          <p className="muted">Solo puedes modificar tu observación. Las notas y el estado de Bienestar permanecen en modo consulta.</p>
+          <label style={{display:'block',marginTop:12}}>Observación</label>
+          <textarea rows={4} style={{width:'100%',padding:12,border:'1px solid #ddd5ed',borderRadius:10}} value={editingTeacherObservation.observaciones} onChange={e=>setEditingTeacherObservation(v=>({...v,observaciones:e.target.value}))}/>
+          <div style={{display:'flex',gap:10,marginTop:12}}>
+            <button className="primary inline" type="submit" disabled={savingTeacherObservation||!editingTeacherObservation.key}>{savingTeacherObservation?'Guardando…':'Guardar observación'}</button>
+            <button type="button" className="refresh" onClick={()=>setEditingTeacherObservation(null)}>Cancelar</button>
+          </div>
+        </form>}
+        <SimpleTable columns={[
+          {key:'estudiante',label:'Estudiante'},
+          {key:'programa',label:'Programa'},
+          {key:'asignaturas',label:'Asignaturas'},
+          {key:'alerta',label:'Alerta académica',render:r=>r.enRiesgo?'En riesgo':'Sin alerta'},
+          {key:'estadoBienestar',label:'Estado Bienestar',render:r=>r.estadoBienestar||'Sin seguimiento'},
+          {key:'observaciones',label:'Observaciones Bienestar'},
+          ...(profile?.role==='docente'?[{key:'observacionDocente',label:'Mi observación',render:r=>r.observacionDocente||'—'}]:[]),
+          {key:'historial',label:'Historial',render:r=><FollowupHistoryButton key={followupKey(r)} student={r} disabled={savingFollowup||savingTeacherObservation||Boolean(deletingFollowup)}/>},
+          {key:'acciones',label:'Acciones',render:r=>canEditFollowups?<div className="user-actions">
+            <button type="button" className="refresh" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>{setFollowupNotice('');setEditingFollowup({key:followupKey(r),estudiante:r.estudiante,estado:r.estadoBienestar||'Sin seguimiento',observaciones:r.observaciones||''})}}>Editar seguimiento</button>
+            {Object.prototype.hasOwnProperty.call(followups,followupKey(r))&&<button type="button" className="ghost small danger-action" disabled={savingFollowup||Boolean(deletingFollowup)} onClick={()=>deleteFollowup(r)} aria-label={'Eliminar seguimiento de '+r.estudiante}>{deletingFollowup===followupKey(r)?'Eliminando…':'Eliminar seguimiento'}</button>}
+          </div>:canEditTeacherObservations?<button type="button" className="refresh" disabled={savingTeacherObservation} onClick={()=>{setFollowupNotice('');setEditingTeacherObservation({key:followupKey(r),estudiante:r.estudiante,observaciones:r.observacionDocente||''})}}>Editar mi observación</button>:'Solo lectura'}
+        ]} rows={visibleBienestarRows}/>
 
       </section>}
 
