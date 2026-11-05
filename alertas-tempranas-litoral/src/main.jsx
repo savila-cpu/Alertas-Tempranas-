@@ -365,11 +365,19 @@ function FilterBar({data,filters,setFilters}){
 
 const groupRows=(data,key)=>Object.values(data.reduce((acc,r)=>{
   const name=r[key]||'Sin información'
-  acc[name]??={name,total:0,risk:0,students:new Set()}
-  acc[name].total++; if(r.enRiesgo) acc[name].risk++
-  acc[name].students.add(r.documento||r.estudiante||Math.random())
+  acc[name]??={name,total:0,students:new Set(),riskStudents:new Set()}
+  acc[name].total++
+  const student=String(r.documento||r.estudiante||'').trim()
+  if(student){
+    acc[name].students.add(student)
+    if(r.enRiesgo) acc[name].riskStudents.add(student)
+  }
   return acc
-},{})).map(x=>({...x,students:x.students.size,pct:x.total?Math.round(x.risk/x.total*100):0})).sort((a,b)=>b.pct-a.pct)
+},{})).map(x=>{
+  const students=x.students.size
+  const risk=x.riskStudents.size
+  return {...x,students,risk,pct:students?Math.round(risk/students*100):0}
+}).sort((a,b)=>b.pct-a.pct || b.risk-a.risk)
 
 // Equivalencias académicas explícitas. No fusionar asignaturas solo por palabras comunes.
 // Normalización de variantes tipográficas y sufijos de grupo/programa observados en Notas.
@@ -441,12 +449,15 @@ function groupSubjects(data){
     if(student){g.students.add(student);if(r.enRiesgo)g.riskStudents.add(student)}
     if(r.asignatura)g.variants.add(r.asignatura)
   }
-  return [...groups.values()].map(g=>({
-    name:g.name,total:g.total,risk:g.risk,students:g.students.size,
-    riskStudents:g.riskStudents.size,
-    variants:[...g.variants].sort((a,b)=>a.localeCompare(b,'es')).join(' · '),
-    pct:g.total?Math.round(g.risk/g.total*100):0
-  })).sort((a,b)=>b.risk-a.risk || b.riskStudents-a.riskStudents || a.name.localeCompare(b.name,'es'))
+  return [...groups.values()].map(g=>{
+    const students=g.students.size
+    const riskStudents=g.riskStudents.size
+    return {
+      name:g.name,total:g.total,risk:g.risk,students,riskStudents,
+      variants:[...g.variants].sort((a,b)=>a.localeCompare(b,'es')).join(' · '),
+      pct:students?Math.round(riskStudents/students*100):0
+    }
+  }).sort((a,b)=>b.pct-a.pct || b.riskStudents-a.riskStudents || a.name.localeCompare(b.name,'es'))
 }
 
 function SimpleTable({columns,rows,empty='No hay información para mostrar.'}){
@@ -841,8 +852,8 @@ function Dashboard({profile}){
           </section>
         </div>
         <div className="two-col">
-          <section className="card page-card"><div className="section-head"><div><h2>Programas con mayor alerta</h2><p className="muted">Porcentaje de registros clasificados en riesgo.</p></div></div>
-            <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'risk',label:'Alertas'},{key:'pct',label:'% pérdida',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={programRows.slice(0,8)}/>
+          <section className="card page-card"><div className="section-head"><div><h2>Programas con mayor alerta</h2><p className="muted">Comparación por estudiantes matriculados y estudiantes únicos en riesgo.</p></div></div>
+            <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={programRows.slice(0,8)}/>
           </section>
           <section className="card page-card"><div className="section-head"><div><h2>Estudiantes en riesgo</h2><p className="muted">Vista rápida del seguimiento prioritario.</p></div></div>
             <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignatura',label:'Asignatura'},{key:'promedio',label:'Nota / acumulado'}]} rows={riskRows.slice(0,8)}/>
@@ -889,15 +900,15 @@ function Dashboard({profile}){
       </section>}
 
       {tab==='programas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Programas</h1><p>Consolidado de todos los estudiantes registrados, incluidos los que no presentan alerta.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'Registros en riesgo'},{key:'pct',label:'% pérdida',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
+        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><b>{r.pct}%</b>}]} rows={programRows}/>
       </section>}
 
       {tab==='docentes'&&<section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Total de estudiantes atendidos y relación de pérdida.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Total estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'En riesgo'},{key:'pct',label:'% pérdida',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={teacherRows}/>
+        <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={teacherRows}/>
       </section>}
 
       {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Listado de mayor a menor pérdida. Se agrupan denominaciones idénticas y equivalencias académicas definidas, sin modificar los datos originales.</p></div></div>
-        <SimpleTable columns={[{key:'name',label:'Asignatura agrupada'},{key:'variants',label:'Denominaciones incluidas'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'Registros con pérdida'},{key:'riskStudents',label:'Estudiantes con pérdida'},{key:'pct',label:'% pérdida'}]} rows={subjectRows}/>
+        <SimpleTable columns={[{key:'name',label:'Asignatura agrupada'},{key:'variants',label:'Denominaciones incluidas'},{key:'students',label:'Estudiantes matriculados'},{key:'riskStudents',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo'}]} rows={subjectRows}/>
       </section>}
 
       {tab==='notas-pendientes'&&<section className="card page-card">
