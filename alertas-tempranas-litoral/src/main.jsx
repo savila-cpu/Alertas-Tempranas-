@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './supabase'
 import FollowupHistoryButton from './FollowupHistory'
+import TeacherProfile from './TeacherProfile'
 import './styles.css'
 
 const SHEET_ID = '1PCA-H_KFyTOb_d1ry35dtDkYcCBIEshtDlyP3WSM1OU'
@@ -485,6 +486,7 @@ function Dashboard({profile}){
   const [studentSort,setStudentSort]=useState('alfabetico')
   const [programSort,setProgramSort]=useState('riesgo_desc')
   const [teacherSort,setTeacherSort]=useState('riesgo_desc')
+  const [selectedTeacher,setSelectedTeacher]=useState('')
   const [subjectSort,setSubjectSort]=useState('riesgo_desc')
   const [bienestarSearch,setBienestarSearch]=useState('')
   const [pendingNotesSearch,setPendingNotesSearch]=useState('')
@@ -637,6 +639,8 @@ function Dashboard({profile}){
   const sortedTeacherRows=[...teacherRows].sort((a,b)=>teacherSort==='alfabetico'
     ?String(a.name).localeCompare(String(b.name),'es')
     :b.risk-a.risk || String(a.name).localeCompare(String(b.name),'es'))
+  const selectedTeacherRows=selectedTeacher?filtered.filter(r=>String(r.docente||'').trim()===selectedTeacher):[]
+  const selectedTeacherPendingRows=selectedTeacher?pendingNotesRows.filter(r=>String(r.docente||'').trim()===selectedTeacher):[]
   const sortedSubjectRows=[...subjectRows].sort((a,b)=>subjectSort==='alfabetico'
     ?String(a.name).localeCompare(String(b.name),'es')
     :b.riskStudents-a.riskStudents || String(a.name).localeCompare(String(b.name),'es'))
@@ -985,17 +989,33 @@ function Dashboard({profile}){
         ]} rows={sortedProgramRows}/>
       </section>}
 
-      {tab==='docentes'&&<section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Total de estudiantes atendidos y relación de pérdida.</p></div></div>
-        <div style={{display:'flex',gap:14,alignItems:'end',marginBottom:18,flexWrap:'wrap'}}>
-          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Ordenar por
-            <select value={teacherSort} onChange={e=>setTeacherSort(e.target.value)}>
-              <option value="riesgo_desc">Mayor a menor estudiantes en riesgo</option>
-              <option value="alfabetico">Orden alfabético</option>
-            </select>
-          </label>
-        </div>
-        <SimpleTable columns={[{key:'name',label:'Docente'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={sortedTeacherRows}/>
-      </section>}
+      {tab==='docentes'&&(selectedTeacher?
+        <TeacherProfile
+          teacherKey={normalize(selectedTeacher)}
+          teacherName={selectedTeacher}
+          academicRows={selectedTeacherRows}
+          pendingRows={selectedTeacherPendingRows}
+          canEdit={['admin','coordinator'].includes(profile?.role)}
+          userId={profile?.id}
+          onClose={()=>setSelectedTeacher('')}
+        />:
+        <section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Consulta académica y acceso al perfil personal y profesional de cada profesor.</p></div></div>
+          <div style={{display:'flex',gap:14,alignItems:'end',marginBottom:18,flexWrap:'wrap'}}>
+            <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Ordenar por
+              <select value={teacherSort} onChange={e=>setTeacherSort(e.target.value)}>
+                <option value="riesgo_desc">Mayor a menor estudiantes en riesgo</option>
+                <option value="alfabetico">Orden alfabético</option>
+              </select>
+            </label>
+          </div>
+          <SimpleTable columns={[
+            {key:'name',label:'Docente',render:r=><button type="button" className="link-button" onClick={()=>setSelectedTeacher(r.name)}>{r.name}</button>},
+            {key:'students',label:'Estudiantes matriculados'},
+            {key:'risk',label:'Estudiantes en riesgo'},
+            {key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>},
+            {key:'perfil',label:'Perfil',render:r=><button type="button" className="refresh" onClick={()=>setSelectedTeacher(r.name)}>Ver perfil</button>}
+          ]} rows={sortedTeacherRows}/>
+        </section>)}
 
       {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Listado de asignaturas agrupadas según equivalencias académicas definidas.</p></div></div>
         <div style={{display:'flex',gap:14,alignItems:'end',marginBottom:18,flexWrap:'wrap'}}>
