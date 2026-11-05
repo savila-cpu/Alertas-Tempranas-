@@ -482,6 +482,7 @@ function Dashboard({profile}){
   const [filters,setFilters]=useState({periodo:'',programa:'',modalidad:'',bloque:'',corte:'',docente:''})
   const [studentStatus,setStudentStatus]=useState('todos')
   const [studentSearch,setStudentSearch]=useState('')
+  const [studentSort,setStudentSort]=useState('alfabetico')
   const [bienestarSearch,setBienestarSearch]=useState('')
   const [pendingNotesSearch,setPendingNotesSearch]=useState('')
   const [pendingProgram,setPendingProgram]=useState('')
@@ -670,6 +671,11 @@ function Dashboard({profile}){
     if(studentStatus==='pendientes' && r.tieneReporte)return false
     const query=normalize(studentSearch)
     return !query || normalize(r.estudiante).includes(query) || normalize(r.documento).includes(query)
+  }).sort((a,b)=>{
+    if(studentSort==='perdidas_desc'){
+      return b.asignaturasPerdidas-a.asignaturasPerdidas || String(a.estudiante).localeCompare(String(b.estudiante),'es')
+    }
+    return String(a.estudiante).localeCompare(String(b.estudiante),'es')
   })
 
   // Para notas pendientes se toma solamente el estado académico más reciente
@@ -903,10 +909,16 @@ function Dashboard({profile}){
               <option value="pendientes">Sin evaluación reportada</option>
             </select>
           </label>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:230}}>Ordenar por
+            <select value={studentSort} onChange={e=>setStudentSort(e.target.value)}>
+              <option value="alfabetico">Orden alfabético</option>
+              <option value="perdidas_desc">Mayor a menor asignaturas perdidas</option>
+            </select>
+          </label>
           <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:250}}>Buscar estudiante
             <input type="search" placeholder="Nombre o identificación" value={studentSearch} onChange={e=>setStudentSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
           </label>
-          <button className="refresh" onClick={()=>{setStudentStatus('todos');setStudentSearch('')}}>Limpiar búsqueda</button>
+          <button className="refresh" onClick={()=>{setStudentStatus('todos');setStudentSearch('');setStudentSort('alfabetico')}}>Limpiar búsqueda</button>
         </div>
         <p className="muted">{visibleStudentRows.length} estudiantes en el listado · {studentRows.length} estudiantes en la selección · {studentRows.filter(r=>r.asignaturasPerdidas>0).length} con asignaturas perdidas</p>
         <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'documento',label:'Identificación'},{key:'programa',label:'Programa'},{key:'modalidad',label:'Modalidad'},{key:'asignaturasPerdidas',label:'Asignaturas perdidas',render:r=><span className={r.asignaturasPerdidas?'pill red':'pill'}>{r.tieneReporte?r.asignaturasPerdidas:'Sin evaluar'}</span>},{key:'detallePerdidas',label:'Detalle de asignaturas perdidas',render:r=>r.detallePerdidas||'—'},{key:'historial',label:'Perfil / historial',render:r=><FollowupHistoryButton key={followupKey(r)} student={r} disabled={savingFollowup||Boolean(deletingFollowup)}/>}]} rows={visibleStudentRows}/>
