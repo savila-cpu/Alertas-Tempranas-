@@ -799,20 +799,18 @@ function Dashboard({profile}){
             </select>
           </label>
           <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280}}>Buscar
-            <input type="search" placeholder="Estudiante, identificación o asignatura" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
+            <input type="search" placeholder="Docente, programa o asignatura" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
           </label>
           <button className="refresh" onClick={()=>{setPendingProgram('');setPendingTeacher('');setPendingNotesSearch('')}}>Limpiar filtros</button>
         </div>
         <p className="muted">{visiblePendingNotesRows.length} registros en el listado · Reglas de cargue esperado: presencial 30% / 60% / 100%; virtual 40% / 100% por bloque.</p>
         <SimpleTable columns={[
-          {key:'estudiante',label:'Estudiante'},
-          {key:'documento',label:'Identificación'},
+          {key:'docente',label:'Docente'},
           {key:'programa',label:'Programa'},
           {key:'modalidad',label:'Modalidad'},
           {key:'bloque',label:'Bloque',render:r=>r.bloque||'—'},
           {key:'corte',label:'Corte',render:r=>r.corte||'—'},
           {key:'asignatura',label:'Asignatura'},
-          {key:'docente',label:'Docente'},
           {key:'porcentaje',label:'% cargado',render:r=><span className={r.porcentaje===0?'pill red':'pill'}>{r.porcentaje}%</span>},
           {key:'porcentajeEsperado',label:'% esperado',render:r=>`${r.porcentajeEsperado}%`},
           {key:'porcentajeFaltante',label:'% faltante',render:r=><span className="pill red">{r.porcentajeFaltante}%</span>},
