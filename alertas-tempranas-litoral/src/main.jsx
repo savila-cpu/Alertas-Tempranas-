@@ -623,13 +623,48 @@ function Dashboard({profile}){
     return !query || normalize(r.estudiante).includes(query) || normalize(r.documento).includes(query)
   })
 
+  // Para notas pendientes se toma solamente el estado académico más reciente
+  // de cada estudiante + programa + asignatura + bloque. Así, un registro de
+  // Corte 2 reemplaza la alerta histórica del Corte 1 para esa misma asignatura.
+  const academicProgressKey=r=>[
+    String(r.documento||r.estudiante||'').trim(),
+    String(r.programa||'').trim(),
+    normalize(r.asignatura||''),
+    normalize(r.modalidad||''),
+    String(r.bloque||'').trim()
+  ].join('||')
+
+  const latestAcademicProgress=new Map()
+  for(const r of data){
+    const key=academicProgressKey(r)
+    const current=latestAcademicProgress.get(key)
+    if(!current){
+      latestAcademicProgress.set(key,r)
+      continue
+    }
+    const currentCut=Number(current.corte||0)
+    const nextCut=Number(r.corte||0)
+    const currentPct=Number(current.porcentaje||0)
+    const nextPct=Number(r.porcentaje||0)
+    if(nextCut>currentCut || (nextCut===currentCut && nextPct>currentPct)){
+      latestAcademicProgress.set(key,r)
+    }
+  }
+
   const pendingNotesRows=filtered
+    .filter(r=>latestAcademicProgress.get(academicProgressKey(r))===r)
     .map(r=>{
       const esperado=expectedEvaluationPercentage(r)
       const pendiente=esperado!==null && Number(r.porcentaje||0)<esperado
       return {...r,porcentajeEsperado:esperado,porcentajeFaltante:esperado===null?null:Math.max(0,esperado-Number(r.porcentaje||0)),pendiente}
     })
     .filter(r=>r.pendiente)
+
+  const currentAcademicRows=filtered.filter(r=>latestAcademicProgress.get(academicProgressKey(r))===r)
+  const currentCompleteRows=currentAcademicRows.filter(r=>{
+    const esperado=expectedEvaluationPercentage(r)
+    return esperado!==null && Number(r.porcentaje||0)>=esperado
+  })
 
   const pendingPrograms=[...new Set(pendingNotesRows.map(r=>r.programa).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'))
   const pendingTeachers=[...new Set(pendingNotesRows.map(r=>r.docente).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'))
@@ -806,7 +841,7 @@ function Dashboard({profile}){
         <div className="stats" style={{marginBottom:18}}>
           <div className="card stat"><span>Registros pendientes</span><strong>{visiblePendingNotesRows.length}</strong><small>asignaturas con cargue incompleto</small></div>
           <div className="card stat"><span>Estudiantes</span><strong>{pendingStudents.size}</strong><small>con al menos una nota pendiente</small></div>
-          <div className="card stat"><span>Cargue completo</span><strong>{filtered.length-pendingNotesRows.length}</strong><small>registros al porcentaje esperado</small></div>
+          <div className="card stat"><span>Cargue completo</span><strong>{currentCompleteRows.length}</strong><small>registros actuales al porcentaje esperado</small></div>
         </div>
         <div style={{display:'flex',flexWrap:'wrap',gap:14,alignItems:'end',marginBottom:18}}>
           <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Programa
@@ -828,7 +863,7 @@ function Dashboard({profile}){
           </label>
           <button className="refresh" onClick={()=>{setPendingProgram('');setPendingTeacher('');setPendingNotesSearch('')}}>Limpiar filtros</button>
         </div>
-        <p className="muted">{visiblePendingNotesRows.length} registros en el listado · Reglas de cargue esperado: presencial 30% / 60% / 100%; virtual 40% / 100% por bloque.</p>
+        <p className="muted">{visiblePendingNotesRows.length} registros en el listado · Se muestra únicamente el estado más reciente de cada asignatura. Reglas de cargue esperado: presencial 30% / 60% / 100%; virtual 40% / 100% por bloque.</p>
         <SimpleTable columns={[
           {key:'estudiante',label:'Estudiante'},
           {key:'docente',label:'Docente'},
