@@ -109,3 +109,7 @@ tbody tr:hover{background:#faf8ff}
 .risk-chart-legend{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:10px;font-size:12px;color:#756c84;flex-wrap:wrap}
 .risk-chart-legend span{display:flex;align-items:center;gap:8px}.risk-chart-legend i{width:12px;height:4px;border-radius:4px;background:#7057d9}
 @media(max-width:760px){.risk-chart-controls{width:100%;justify-content:stretch}.risk-chart-controls label{flex:1 1 160px}.risk-tooltip{position:static;margin:8px 0 4px}.risk-line-chart{padding-bottom:8px}}
+
+.link-button{appearance:none;border:0;background:transparent;padding:0;color:#5f46c7;font:inherit;text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.link-button:hover{color:#432fa0}
+.link-button:focus-visible{outline:2px solid #8f78e8;outline-offset:3px;border-radius:4px}
