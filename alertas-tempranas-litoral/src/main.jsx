@@ -618,6 +618,18 @@ function Dashboard({profile}){
     return acc
   },{})).map(r=>({...r,asignaturasEnRiesgo:r.subjects.size}))
     .sort((a,b)=>b.asignaturasEnRiesgo-a.asignaturasEnRiesgo || String(a.estudiante).localeCompare(String(b.estudiante),'es'))
+  const riskSubjectDistribution=(()=>{
+    const counts=riskStudentSummary.reduce((acc,r)=>{
+      const n=Number(r.asignaturasEnRiesgo||0)
+      if(n>0)acc[n]=(acc[n]||0)+1
+      return acc
+    },{})
+    const maxCount=Math.max(0,...Object.keys(counts).map(Number))
+    return Array.from({length:maxCount},(_,i)=>{
+      const asignaturas=maxCount-i
+      return {asignaturas,estudiantes:counts[asignaturas]||0}
+    })
+  })()
   const riskPct=uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0
   const sortedProgramRows=[...programRows].sort((a,b)=>programSort==='alfabetico'
     ?String(a.name).localeCompare(String(b.name),'es')
@@ -890,7 +902,15 @@ function Dashboard({profile}){
             ]} rows={riskStudentSummary.slice(0,8)}/>
           </section>
         </div>
-        <section className="card page-card" style={{marginTop:18}}>
+        <div className="two-col" style={{marginTop:18}}>
+          <section className="card page-card">
+            <div className="section-head"><div><h2>Estudiantes por número de asignaturas perdidas</h2><p className="muted">Distribución de estudiantes únicos según la cantidad de asignaturas actualmente en riesgo.</p></div></div>
+            <SimpleTable columns={[
+              {key:'asignaturas',label:'Asignaturas perdidas'},
+              {key:'estudiantes',label:'Número de estudiantes',render:r=><span className="pill red">{r.estudiantes}</span>}
+            ]} rows={riskSubjectDistribution}/>
+          </section>
+          <section className="card page-card">
           <div className="section-head"><div><h2>Docentes con notas pendientes</h2><p className="muted">Cantidad de registros con cargue incompleto por docente, según los filtros actuales.</p></div></div>
           <SimpleTable columns={[
             {key:'docente',label:'Docente'},
@@ -907,7 +927,8 @@ function Dashboard({profile}){
               }}
             >Ver notas pendientes</button>}
           ]} rows={pendingTeacherSummary}/>
-        </section>
+          </section>
+        </div>
       </>}
 
       {tab==='estudiantes'&&<section className="card page-card">
