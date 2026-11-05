@@ -645,6 +645,13 @@ function Dashboard({profile}){
 
   const pendingStudents=new Set(visiblePendingNotesRows.map(r=>r.documento||r.estudiante).filter(Boolean))
 
+  const pendingTeacherSummary=Object.values(pendingNotesRows.reduce((acc,r)=>{
+    const teacher=String(r.docente||'Sin docente').trim()||'Sin docente'
+    if(!acc[teacher])acc[teacher]={docente:teacher,pendientes:0}
+    acc[teacher].pendientes+=1
+    return acc
+  },{})).sort((a,b)=>b.pendientes-a.pendientes || a.docente.localeCompare(b.docente,'es'))
+
   function downloadPendingNotes(){
     const headers=['Estudiante','Identificación','Programa','Modalidad','Bloque','Corte','Asignatura','Docente','% cargado','% esperado','% faltante','Promedio evaluación']
     const lines=[headers,...visiblePendingNotesRows.map(r=>[
@@ -736,6 +743,13 @@ function Dashboard({profile}){
             <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignatura',label:'Asignatura'},{key:'promedio',label:'Nota / acumulado'}]} rows={riskRows.slice(0,8)}/>
           </section>
         </div>
+        <section className="card page-card" style={{marginTop:18}}>
+          <div className="section-head"><div><h2>Docentes con notas pendientes</h2><p className="muted">Cantidad de registros con cargue incompleto por docente, según los filtros actuales.</p></div></div>
+          <SimpleTable columns={[
+            {key:'docente',label:'Docente'},
+            {key:'pendientes',label:'Notas pendientes',render:r=><span className="pill red">{r.pendientes}</span>}
+          ]} rows={pendingTeacherSummary}/>
+        </section>
       </>}
 
       {tab==='estudiantes'&&<section className="card page-card">
