@@ -9,8 +9,8 @@ import { supabase } from './supabase'
 import FollowupHistoryButton from './FollowupHistory'
 import './styles.css'
 
-const SHEET_ID = '1LC9xS0TyExB9Foy7UWqwV1CNcbJ2kE8gQxRq4gzmMoc'
-const SHEET_GID = '260302609'
+const SHEET_ID = '1PCA-H_KFyTOb_d1ry35dtDkYcCBIEshtDlyP3WSM1OU'
+const SHEET_GID = '954460571'
 const SHEET_CSV_URLS = [
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`,
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${SHEET_GID}`
