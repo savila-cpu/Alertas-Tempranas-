@@ -98,6 +98,20 @@ function normalizePeriod(v){
   return raw
 }
 
+function expectedEvaluationPercentage(row){
+  const corte=Number(row?.corte||0)
+  const virtual=normalize(row?.modalidad).includes('virtual')
+  if(virtual){
+    if(corte===1) return 40
+    if(corte===2) return 100
+    return row?.sinReporte ? 40 : null
+  }
+  if(corte===1) return 30
+  if(corte===2) return 60
+  if(corte===3) return 100
+  return row?.sinReporte ? 30 : null
+}
+
 function normalizeRecord(row){
   const estudiante=pickFuzzy(row,
     ['Nombre_completo','estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'],
@@ -458,6 +472,7 @@ function Dashboard({profile}){
   const [studentStatus,setStudentStatus]=useState('todos')
   const [studentSearch,setStudentSearch]=useState('')
   const [bienestarSearch,setBienestarSearch]=useState('')
+  const [pendingNotesSearch,setPendingNotesSearch]=useState('')
 
   async function loadData(){
     setLoading(true);setDataError('')
@@ -606,6 +621,38 @@ function Dashboard({profile}){
     return !query || normalize(r.estudiante).includes(query) || normalize(r.documento).includes(query)
   })
 
+  const pendingNotesRows=filtered
+    .map(r=>{
+      const esperado=expectedEvaluationPercentage(r)
+      const pendiente=esperado!==null && Number(r.porcentaje||0)<esperado
+      return {...r,porcentajeEsperado:esperado,porcentajeFaltante:esperado===null?null:Math.max(0,esperado-Number(r.porcentaje||0)),pendiente}
+    })
+    .filter(r=>r.pendiente)
+
+  const visiblePendingNotesRows=pendingNotesRows.filter(r=>{
+    const query=normalize(pendingNotesSearch)
+    if(!query)return true
+    return [r.estudiante,r.documento,r.programa,r.asignatura,r.docente]
+      .some(v=>normalize(v).includes(query))
+  })
+
+  const pendingStudents=new Set(pendingNotesRows.map(r=>r.documento||r.estudiante).filter(Boolean))
+
+  function downloadPendingNotes(){
+    const headers=['Estudiante','Identificación','Programa','Modalidad','Bloque','Corte','Asignatura','Docente','% cargado','% esperado','% faltante','Promedio evaluación']
+    const lines=[headers,...visiblePendingNotesRows.map(r=>[
+      r.estudiante,r.documento,r.programa,r.modalidad,r.bloque,r.corte,r.asignatura,r.docente,
+      r.porcentaje,r.porcentajeEsperado,r.porcentajeFaltante,r.promedio
+    ])]
+    const csv=lines.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'})
+    const a=document.createElement('a')
+    a.href=URL.createObjectURL(blob)
+    a.download='notas-pendientes.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
   const bienestarRows=Object.values(filtered.reduce((acc,r)=>{
     const key=r.documento||r.estudiante||`${r.programa}-${r.asignatura}`
     if(!acc[key]) acc[key]={...r,subjects:new Set(),teachers:new Set()}
@@ -633,6 +680,7 @@ function Dashboard({profile}){
     ['programas','Programas',GraduationCap],
     ['docentes','Docentes',UserRound],
     ['asignaturas','Asignaturas',BookOpen],
+    ['notas-pendientes','Notas pendientes',AlertTriangle],
     ['bienestar','Bienestar',HeartHandshake],
     ['fuente','Fuente de datos',Database]
   ]
@@ -713,6 +761,42 @@ function Dashboard({profile}){
 
       {tab==='asignaturas'&&<section className="card page-card"><div className="page-title compact"><div><h1>Asignaturas</h1><p>Listado de mayor a menor pérdida. Se agrupan denominaciones idénticas y equivalencias académicas definidas, sin modificar los datos originales.</p></div></div>
         <SimpleTable columns={[{key:'name',label:'Asignatura agrupada'},{key:'variants',label:'Denominaciones incluidas'},{key:'students',label:'Estudiantes'},{key:'total',label:'Registros'},{key:'risk',label:'Registros con pérdida'},{key:'riskStudents',label:'Estudiantes con pérdida'},{key:'pct',label:'% pérdida'}]} rows={subjectRows}/>
+      </section>}
+
+      {tab==='notas-pendientes'&&<section className="card page-card">
+        <div className="page-title compact">
+          <div>
+            <h1>Notas pendientes por cargar</h1>
+            <p>Registros cuyo porcentaje evaluado está por debajo del acumulado esperado para el corte seleccionado.</p>
+          </div>
+          <button className="primary inline" onClick={downloadPendingNotes}><FileDown size={16}/>Descargar</button>
+        </div>
+        <div className="stats" style={{marginBottom:18}}>
+          <div className="card stat"><span>Registros pendientes</span><strong>{pendingNotesRows.length}</strong><small>asignaturas con cargue incompleto</small></div>
+          <div className="card stat"><span>Estudiantes</span><strong>{pendingStudents.size}</strong><small>con al menos una nota pendiente</small></div>
+          <div className="card stat"><span>Cargue completo</span><strong>{filtered.length-pendingNotesRows.length}</strong><small>registros al porcentaje esperado</small></div>
+        </div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:14,alignItems:'end',marginBottom:18}}>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280}}>Buscar
+            <input type="search" placeholder="Estudiante, identificación, asignatura o docente" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
+          </label>
+          <button className="refresh" onClick={()=>setPendingNotesSearch('')}>Limpiar búsqueda</button>
+        </div>
+        <p className="muted">{visiblePendingNotesRows.length} registros en el listado · Reglas de cargue esperado: presencial 30% / 60% / 100%; virtual 40% / 100% por bloque.</p>
+        <SimpleTable columns={[
+          {key:'estudiante',label:'Estudiante'},
+          {key:'documento',label:'Identificación'},
+          {key:'programa',label:'Programa'},
+          {key:'modalidad',label:'Modalidad'},
+          {key:'bloque',label:'Bloque',render:r=>r.bloque||'—'},
+          {key:'corte',label:'Corte',render:r=>r.corte||'—'},
+          {key:'asignatura',label:'Asignatura'},
+          {key:'docente',label:'Docente'},
+          {key:'porcentaje',label:'% cargado',render:r=><span className={r.porcentaje===0?'pill red':'pill'}>{r.porcentaje}%</span>},
+          {key:'porcentajeEsperado',label:'% esperado',render:r=>`${r.porcentajeEsperado}%`},
+          {key:'porcentajeFaltante',label:'% faltante',render:r=><span className="pill red">{r.porcentajeFaltante}%</span>},
+          {key:'promedio',label:'Promedio'}
+        ]} rows={visiblePendingNotesRows}/>
       </section>}
 
       {tab==='bienestar'&&<section className="card page-card"><div className="page-title compact"><div><h1>Seguimiento de Bienestar</h1><p>Todos los estudiantes del filtro seleccionado, con o sin alerta académica.</p></div><button className="primary inline" onClick={downloadBienestar}><FileDown size={16}/>Descargar</button></div>
