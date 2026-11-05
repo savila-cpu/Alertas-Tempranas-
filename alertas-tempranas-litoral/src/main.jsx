@@ -640,7 +640,6 @@ function Dashboard({profile}){
     ?String(a.name).localeCompare(String(b.name),'es')
     :b.risk-a.risk || String(a.name).localeCompare(String(b.name),'es'))
   const selectedTeacherRows=selectedTeacher?filtered.filter(r=>String(r.docente||'').trim()===selectedTeacher):[]
-  const selectedTeacherPendingRows=selectedTeacher?pendingNotesRows.filter(r=>String(r.docente||'').trim()===selectedTeacher):[]
   const sortedSubjectRows=[...subjectRows].sort((a,b)=>subjectSort==='alfabetico'
     ?String(a.name).localeCompare(String(b.name),'es')
     :b.riskStudents-a.riskStudents || String(a.name).localeCompare(String(b.name),'es'))
@@ -748,6 +747,8 @@ function Dashboard({profile}){
     const esperado=expectedEvaluationPercentage(r)
     return esperado!==null && Number(r.porcentaje||0)>=esperado
   })
+
+  const selectedTeacherPendingRows=selectedTeacher?pendingNotesRows.filter(r=>String(r.docente||'').trim()===selectedTeacher):[]
 
   const pendingPrograms=[...new Set(pendingNotesRows.map(r=>r.programa).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'))
   const pendingTeachers=[...new Set(pendingNotesRows.map(r=>r.docente).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'))
