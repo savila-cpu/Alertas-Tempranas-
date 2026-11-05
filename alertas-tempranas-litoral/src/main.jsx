@@ -144,26 +144,39 @@ function normalizeRecord(row){
   const bloque2=String(bloque).trim()==='2'
   const corteNum=Number(corte||0)
 
-  // Solo se excluye un registro del bloque activo cuando realmente existen
-  // campos de evaluación y ambos están en cero. Si las columnas no fueron
-  // reconocidas, el registro permanece visible para evitar vaciar el tablero.
-  const sinReporte=virtual && bloque2 &&
-    tieneCampoPorcentaje && tieneCampoPromedio &&
+  // Un registro sin evaluación no se clasifica como pérdida.
+  // Esto aplica tanto a presencialidad como a virtualidad.
+  const sinReporte=tieneCampoPorcentaje && tieneCampoPromedio &&
     porcentaje===0 && promedio===0
 
+  // Reglas institucionales de pérdida por acumulado:
+  // Virtual: 40% -> mínimo 1.2; 100% -> mínimo 3.0.
+  // Presencial: corte 1 (30%) -> 0.9; corte 2 (60%) -> 1.8; corte 3 (100%) -> 3.0.
+  // Si todavía no se ha alcanzado el porcentaje acumulado esperado del corte,
+  // el registro no se marca como pérdida por esta regla.
+  let minimoEsperado=null
   let enRiesgo=false
-  if(['1','si','sí','true','perdio','perdido','riesgo'].includes(perdidoRaw)) enRiesgo=true
-  else if(!sinReporte){
-    if(virtual && bloque1 && corteNum===1 && porcentaje>0) enRiesgo=promedio>0 && promedio<0.9
-    else if(virtual && bloque1 && corteNum===2 && porcentaje>0) enRiesgo=promedio>0 && promedio<1.2
-    else if(virtual && porcentaje>=100) enRiesgo=promedio>0 && promedio<3
-    else if(!virtual && porcentaje>0 && porcentaje<=35) enRiesgo=promedio>0 && promedio<0.9
-    else if(promedio>0 && porcentaje>=80) enRiesgo=promedio<3
+
+  if(!sinReporte){
+    if(virtual){
+      if(porcentaje>=100) minimoEsperado=3.0
+      else if(porcentaje>=40) minimoEsperado=1.2
+    }else{
+      if(corteNum>=3 && porcentaje>=100) minimoEsperado=3.0
+      else if(corteNum===2 && porcentaje>=60) minimoEsperado=1.8
+      else if(corteNum===1 && porcentaje>=30) minimoEsperado=0.9
+      else if(porcentaje>=100) minimoEsperado=3.0
+      else if(porcentaje>=60) minimoEsperado=1.8
+      else if(porcentaje>=30) minimoEsperado=0.9
+    }
+
+    if(minimoEsperado!==null) enRiesgo=promedio<minimoEsperado
+    else if(['1','si','sí','true','perdio','perdido','riesgo'].includes(perdidoRaw)) enRiesgo=true
   }
 
   return {
     ...row, estudiante, documento, programa, snies, docente, asignatura,
-    modalidad, bloque, corte, periodo, porcentaje, promedio, enRiesgo,
+    modalidad, bloque, corte, periodo, porcentaje, promedio, minimoEsperado, enRiesgo,
     sinReporte, estadoBienestar, observaciones, asesor,
     _porcentajeRaw:porcentajeRaw, _promedioRaw:promedioRaw
   }
@@ -723,7 +736,7 @@ function Dashboard({profile}){
           <div><span>Porcentaje detectado</span><b>{data.some(r=>r._porcentajeRaw!=='')?'Sí':'No'}</b></div><div><span>Promedio detectado</span><b>{data.some(r=>r._promedioRaw!=='')?'Sí':'No'}</b></div>
         </div>
         <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
-        <p className="muted source-note">La fuente configurada corresponde a la pestaña "Notas" de la hoja institucional de Alertas Tempranas. Los estudiantes de un bloque virtual aún no evaluado (0% y promedio 0) se excluyen de los reportes de riesgo.</p>
+        <p className="muted source-note">La fuente configurada corresponde a la pestaña "Notas" de la hoja institucional de Alertas Tempranas. Los registros sin evaluación (0% y promedio 0) no se clasifican como pérdida. Reglas: presencial 30%→0,9; 60%→1,8; 100%→3,0. Virtual 40%→1,2; 100%→3,0.</p>
       </section>}
 
       {tab==='usuarios'&&profile?.role==='admin'&&<AdminUsers/>}
