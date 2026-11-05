@@ -129,6 +129,8 @@ function normalizeRecord(row){
   const snies=pickFuzzy(row,['snies','codigo_snies'],[['snies']])
   const docente=pickFuzzy(row,['docente','nombre_docente','profesor'],[['nombre','docente'],['docente'],['profesor']])
   const asignatura=pickFuzzy(row,['Nombre_asignatura','asignatura','materia','curso'],[['nombre','asignatura'],['asignatura'],['materia']])
+  const codigoAsignatura=pickFuzzy(row,['Codigo_asignatura','codigo_asignatura'],[['codigo','asignatura']])
+  const codigoCurso=pickFuzzy(row,['Codigo_curso','codigo_curso'],[['codigo','curso']])
   const modalidad=pickFuzzy(row,['modalidad'],[['modalidad']])
   const bloqueRaw=pickFuzzy(row,['bloque'],[['bloque']])
   const bloque=String(bloqueRaw).trim().replace(/\\.0+$/,'')
@@ -174,37 +176,81 @@ function normalizeRecord(row){
   const sinReporte=tieneCampoPorcentaje && tieneCampoPromedio &&
     porcentaje===0 && promedio===0
 
-  // Reglas institucionales de pérdida por acumulado:
-  // Virtual: 40% -> mínimo 1.2; 100% -> mínimo 3.0.
-  // Presencial: corte 1 (30%) -> 0.9; corte 2 (60%) -> 1.8; corte 3 (100%) -> 3.0.
-  // Si todavía no se ha alcanzado el porcentaje acumulado esperado del corte,
-  // el registro no se marca como pérdida por esta regla.
+  // La pérdida por corte se calcula después de normalizar toda la base,
+  // porque Promedio_evaluacion en cortes 2 y 3 es acumulado y requiere restar
+  // el acumulado del corte anterior.
   let minimoEsperado=null
+  let aporteCorte=null
+  let minimoCorte=null
   let enRiesgo=false
-
-  if(!sinReporte){
-    if(virtual){
-      if(porcentaje>=100) minimoEsperado=3.0
-      else if(porcentaje>=40) minimoEsperado=1.2
-    }else{
-      if(corteNum>=3 && porcentaje>=100) minimoEsperado=3.0
-      else if(corteNum===2 && porcentaje>=60) minimoEsperado=1.8
-      else if(corteNum===1 && porcentaje>=30) minimoEsperado=0.9
-      else if(porcentaje>=100) minimoEsperado=3.0
-      else if(porcentaje>=60) minimoEsperado=1.8
-      else if(porcentaje>=30) minimoEsperado=0.9
-    }
-
-    if(minimoEsperado!==null) enRiesgo=promedio<minimoEsperado
-    else if(['1','si','sí','true','perdio','perdido','riesgo'].includes(perdidoRaw)) enRiesgo=true
-  }
+  let enRiesgoAcumulado=false
+  let evaluacionCorteCompleta=false
 
   return {
-    ...row, estudiante, documento, programa, snies, docente, asignatura,
-    modalidad, bloque, corte, periodo, porcentaje, promedio, minimoEsperado, enRiesgo,
+    ...row, estudiante, documento, programa, snies, docente, asignatura, codigoAsignatura, codigoCurso,
+    modalidad, bloque, corte, periodo, porcentaje, promedio, minimoEsperado, aporteCorte, minimoCorte, enRiesgo, enRiesgoAcumulado, evaluacionCorteCompleta,
     sinReporte, estadoBienestar, observaciones, asesor,
     _porcentajeRaw:porcentajeRaw, _promedioRaw:promedioRaw
   }
+}
+
+function applyCutRiskRules(records){
+  const byAcademicKey=new Map()
+
+  const academicKey=r=>[
+    String(r.documento||r.estudiante||'').trim(),
+    String(r.codigoAsignatura||normalize(r.asignatura)||'').trim(),
+    String(r.programa||'').trim(),
+    normalize(r.modalidad||''),
+    String(r.bloque||'').trim()
+  ].join('||')
+
+  for(const r of records){
+    const key=academicKey(r)
+    if(!byAcademicKey.has(key))byAcademicKey.set(key,[])
+    byAcademicKey.get(key).push(r)
+  }
+
+  for(const rows of byAcademicKey.values()){
+    rows.sort((a,b)=>Number(a.corte||0)-Number(b.corte||0) || Number(a.porcentaje||0)-Number(b.porcentaje||0))
+
+    for(const r of rows){
+      const corte=Number(r.corte||0)
+      const virtual=normalize(r.modalidad).includes('virtual')
+      const expectedPct=virtual?(corte===1?40:corte===2?100:null):(corte===1?30:corte===2?60:corte===3?100:null)
+      const minCumulative=virtual?(corte===1?1.2:corte===2?3.0:null):(corte===1?0.9:corte===2?1.8:corte===3?3.0:null)
+      const minCut=virtual?(corte===1?1.2:corte===2?1.8:null):(corte===1?0.9:corte===2?0.9:corte===3?1.2:null)
+
+      r.minimoEsperado=minCumulative
+      r.minimoCorte=minCut
+      r.evaluacionCorteCompleta=expectedPct!==null && Number(r.porcentaje||0)>=expectedPct
+      r.enRiesgoAcumulado=!r.sinReporte && r.evaluacionCorteCompleta && minCumulative!==null && Number(r.promedio||0)<minCumulative
+      r.aporteCorte=null
+      r.enRiesgo=false
+
+      if(r.sinReporte || !r.evaluacionCorteCompleta || minCut===null)continue
+
+      if(corte===1){
+        r.aporteCorte=Number(r.promedio||0)
+        r.enRiesgo=r.aporteCorte<minCut
+        continue
+      }
+
+      const previous=rows
+        .filter(x=>Number(x.corte||0)===corte-1)
+        .sort((a,b)=>Number(b.porcentaje||0)-Number(a.porcentaje||0))[0]
+
+      if(previous && Number.isFinite(Number(previous.promedio))){
+        r.aporteCorte=Number((Number(r.promedio||0)-Number(previous.promedio||0)).toFixed(4))
+        r.enRiesgo=r.aporteCorte<minCut
+      }else{
+        // Si falta el corte anterior, no se inventa el aporte del corte actual.
+        // Se conserva únicamente la alerta acumulada como respaldo.
+        r.enRiesgo=r.enRiesgoAcumulado
+      }
+    }
+  }
+  return records
 }
 
 function Login({ onLogin }) {
@@ -507,7 +553,7 @@ function Dashboard({profile}){
           if(!res.ok) throw new Error(`HTTP ${res.status}`)
           const text=await res.text()
           if(text.trim().startsWith('<!DOCTYPE')||text.includes('<html')) throw new Error('respuesta HTML')
-          const candidate=parseCSV(text).map(normalizeRecord)
+          const candidate=applyCutRiskRules(parseCSV(text).map(normalizeRecord))
           if(candidate.length >= 1000){ parsed=candidate; break }
           if(candidate.length){ lastError=`La fuente devolvió solo ${candidate.length} registros; se esperaba la pestaña completa de Notas. No se utilizará una hoja parcial.`; continue }
           lastError='La hoja respondió, pero no devolvió filas de datos.'
@@ -1111,7 +1157,7 @@ function Dashboard({profile}){
           <div><span>Porcentaje detectado</span><b>{data.some(r=>r._porcentajeRaw!=='')?'Sí':'No'}</b></div><div><span>Promedio detectado</span><b>{data.some(r=>r._promedioRaw!=='')?'Sí':'No'}</b></div>
         </div>
         <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
-        <p className="muted source-note">La fuente configurada corresponde a la pestaña "Notas" de la hoja institucional de Alertas Tempranas. Los registros sin evaluación (0% y promedio 0) no se clasifican como pérdida. Reglas: presencial 30%→0,9; 60%→1,8; 100%→3,0. Virtual 40%→1,2; 100%→3,0.</p>
+        <p className="muted source-note">La fuente configurada corresponde a la pestaña "Notas" de la hoja institucional de Alertas Tempranas. Promedio_evaluacion es acumulado: para identificar pérdida del corte se calcula el aporte del corte actual restando el acumulado del corte anterior. Presencial: C1 mínimo 0,9; C2 aporte mínimo 0,9; C3 aporte mínimo 1,2. Virtual: C1 mínimo 1,2; C2 aporte mínimo 1,8. Los registros sin evaluación no se clasifican como pérdida.</p>
       </section>}
 
       {tab==='usuarios'&&profile?.role==='admin'&&<AdminUsers/>}
