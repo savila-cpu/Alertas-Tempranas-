@@ -605,6 +605,15 @@ function Dashboard({profile}){
   const teacherRows=groupRows(reportable,'docente')
   const subjectRows=groupSubjects(reportable)
   const riskRows=reportable.filter(r=>r.enRiesgo)
+  const riskStudentSummary=Object.values(riskRows.reduce((acc,r)=>{
+    const key=String(r.documento||r.estudiante||'').trim()
+    if(!key)return acc
+    if(!acc[key])acc[key]={estudiante:r.estudiante,programa:r.programa,subjects:new Set()}
+    if(!acc[key].programa && r.programa)acc[key].programa=r.programa
+    if(r.asignatura)acc[key].subjects.add(subjectGroupName(r.asignatura))
+    return acc
+  },{})).map(r=>({...r,asignaturasEnRiesgo:r.subjects.size}))
+    .sort((a,b)=>b.asignaturasEnRiesgo-a.asignaturasEnRiesgo || String(a.estudiante).localeCompare(String(b.estudiante),'es'))
   const riskPct=uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0
   const topRiskPrograms=[...programRows].sort((a,b)=>b.risk-a.risk).slice(0,6)
   const riskChartRows=reportable.filter(r=>{
@@ -855,8 +864,12 @@ function Dashboard({profile}){
           <section className="card page-card"><div className="section-head"><div><h2>Programas con mayor alerta</h2><p className="muted">Comparación por estudiantes matriculados y estudiantes únicos en riesgo.</p></div></div>
             <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><span className={r.pct>=30?'pill red':'pill'}>{r.pct}%</span>}]} rows={programRows.slice(0,8)}/>
           </section>
-          <section className="card page-card"><div className="section-head"><div><h2>Estudiantes en riesgo</h2><p className="muted">Vista rápida del seguimiento prioritario.</p></div></div>
-            <SimpleTable columns={[{key:'estudiante',label:'Estudiante'},{key:'programa',label:'Programa'},{key:'asignatura',label:'Asignatura'},{key:'promedio',label:'Nota / acumulado'}]} rows={riskRows.slice(0,8)}/>
+          <section className="card page-card"><div className="section-head"><div><h2>Estudiantes en riesgo</h2><p className="muted">Estudiantes únicos y número de asignaturas actualmente en riesgo.</p></div></div>
+            <SimpleTable columns={[
+              {key:'estudiante',label:'Estudiante'},
+              {key:'programa',label:'Programa'},
+              {key:'asignaturasEnRiesgo',label:'Asignaturas en riesgo',render:r=><span className="pill red">{r.asignaturasEnRiesgo}</span>}
+            ]} rows={riskStudentSummary.slice(0,8)}/>
           </section>
         </div>
         <section className="card page-card" style={{marginTop:18}}>
