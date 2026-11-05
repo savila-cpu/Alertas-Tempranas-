@@ -945,7 +945,23 @@ function Dashboard({profile}){
             </select>
           </label>
         </div>
-        <SimpleTable columns={[{key:'name',label:'Programa'},{key:'students',label:'Estudiantes matriculados'},{key:'risk',label:'Estudiantes en riesgo'},{key:'pct',label:'% estudiantes en riesgo',render:r=><b>{r.pct}%</b>}]} rows={sortedProgramRows}/>
+        <SimpleTable columns={[
+          {key:'name',label:'Programa',render:r=><button
+            type="button"
+            className="link-button"
+            onClick={()=>{
+              setFilters(old=>({...old,programa:r.name}))
+              setStudentStatus('todos')
+              setStudentSearch('')
+              setStudentSort('alfabetico')
+              setTab('estudiantes')
+              window.scrollTo({top:0,behavior:'smooth'})
+            }}
+          >{r.name}</button>},
+          {key:'students',label:'Estudiantes matriculados'},
+          {key:'risk',label:'Estudiantes en riesgo'},
+          {key:'pct',label:'% estudiantes en riesgo',render:r=><b>{r.pct}%</b>}
+        ]} rows={sortedProgramRows}/>
       </section>}
 
       {tab==='docentes'&&<section className="card page-card"><div className="page-title compact"><div><h1>Docentes</h1><p>Total de estudiantes atendidos y relación de pérdida.</p></div></div>
