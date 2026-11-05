@@ -40,7 +40,7 @@ function parseCSV(text){
   if(rows.length<2) return []
   const headers=rows[0].map((h,i)=> normalize(h) || `col_${i}`)
   return rows.slice(1).map(r=>{
-    const o={}
+    const o={_sourceFieldCount:headers.length}
     headers.forEach((h,i)=>o[h]=(r[i]??'').trim())
     return o
   })
@@ -88,6 +88,16 @@ function pct(v){
   return n<=1 ? n*100 : n
 }
 
+function normalizePeriod(v){
+  const raw=String(v??'').trim()
+  if(!raw) return '2026-2'
+  let m=raw.match(/^(\d{4})[-\/]0?([12])(?:[-\/]\d{1,2})?(?:\s.*)?$/)
+  if(m) return `${m[1]}-${Number(m[2])}`
+  m=raw.match(/^(\d{4})\s*[-_]\s*0?([12])$/)
+  if(m) return `${m[1]}-${Number(m[2])}`
+  return raw
+}
+
 function normalizeRecord(row){
   const estudiante=pickFuzzy(row,
     ['Nombre_completo','estudiante','nombre_estudiante','nombre','estudiante_nombre','nombre_completo','nombre_estudiante_completo','estudiante_completo'],
@@ -107,7 +117,7 @@ function normalizeRecord(row){
   const modalidad=pickFuzzy(row,['modalidad'],[['modalidad']])
   const bloqueRaw=pickFuzzy(row,['bloque'],[['bloque']])
   const bloque=String(bloqueRaw).trim().replace(/\\.0+$/,'')
-  const periodo=pickFuzzy(row,['Nombre_periodo','periodo'],[['nombre','periodo'],['periodo']])||'2026-2'
+  const periodo=normalizePeriod(pickFuzzy(row,['Nombre_periodo','periodo'],[['nombre','periodo'],['periodo']]))
 
   const porcentajeRaw=pickFuzzy(row,
     ['Porcentaje_evaluado','porcentaje_evaluacion','evaluado','porcentaje'],
@@ -646,7 +656,7 @@ function Dashboard({profile}){
           <div className="card stat"><span>Estudiantes</span><strong>{uniqueStudents.size}</strong><small>con información reportable</small></div>
           <div className="card stat risk"><span>En riesgo</span><strong>{riskStudents.size}</strong><small>{uniqueStudents.size?Math.round(riskStudents.size/uniqueStudents.size*100):0}% de estudiantes</small></div>
           <div className="card stat"><span>Programas</span><strong>{programs.size}</strong><small>en el filtro actual</small></div>
-          <div className="card stat"><span>Registros</span><strong>{reportable.length}</strong><small>{filtered.length-reportable.length} sin reporte por bloque</small></div>
+          <div className="card stat"><span>Registros</span><strong>{reportable.length}</strong><small>{filtered.length-reportable.length} sin evaluación reportada</small></div>
         </div>
         <div className="analytics-grid">
           <section className="card page-card analytics-card">
@@ -732,7 +742,7 @@ function Dashboard({profile}){
         <div className="source-grid">
           <div><span>Fuente</span><b>Google Sheets · Notas</b></div><div><span>Estado</span><b className={dataError?'bad':'good'}>{dataError?'Con error':'Conectada'}</b></div>
           <div><span>Registros recibidos</span><b>{data.length}</b></div><div><span>Última actualización</span><b>{updated?updated.toLocaleString('es-CO'):'—'}</b></div>
-          <div><span>Campos detectados</span><b>{data[0]?Object.keys(data[0]).filter(k=>!k.startsWith('_')).length:0}</b></div><div><span>Periodo detectado</span><b>{[...new Set(data.map(r=>r.periodo).filter(Boolean))].join(', ')||'No identificado'}</b></div>
+          <div><span>Campos detectados</span><b>{data[0]?data[0]._sourceFieldCount||0:0}</b></div><div><span>Periodo detectado</span><b>{[...new Set(data.map(r=>r.periodo).filter(Boolean))].join(', ')||'No identificado'}</b></div>
           <div><span>Porcentaje detectado</span><b>{data.some(r=>r._porcentajeRaw!=='')?'Sí':'No'}</b></div><div><span>Promedio detectado</span><b>{data.some(r=>r._promedioRaw!=='')?'Sí':'No'}</b></div>
         </div>
         <button className="primary inline" onClick={loadData}><RefreshCw size={16}/>Sincronizar ahora</button>
