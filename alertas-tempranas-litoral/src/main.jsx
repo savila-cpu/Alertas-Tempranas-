@@ -473,6 +473,8 @@ function Dashboard({profile}){
   const [studentSearch,setStudentSearch]=useState('')
   const [bienestarSearch,setBienestarSearch]=useState('')
   const [pendingNotesSearch,setPendingNotesSearch]=useState('')
+  const [pendingProgram,setPendingProgram]=useState('')
+  const [pendingTeacher,setPendingTeacher]=useState('')
 
   async function loadData(){
     setLoading(true);setDataError('')
@@ -629,14 +631,19 @@ function Dashboard({profile}){
     })
     .filter(r=>r.pendiente)
 
+  const pendingPrograms=[...new Set(pendingNotesRows.map(r=>r.programa).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'))
+  const pendingTeachers=[...new Set(pendingNotesRows.map(r=>r.docente).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'es'))
+
   const visiblePendingNotesRows=pendingNotesRows.filter(r=>{
+    if(pendingProgram && String(r.programa||'').trim()!==pendingProgram)return false
+    if(pendingTeacher && String(r.docente||'').trim()!==pendingTeacher)return false
     const query=normalize(pendingNotesSearch)
     if(!query)return true
     return [r.estudiante,r.documento,r.programa,r.asignatura,r.docente]
       .some(v=>normalize(v).includes(query))
   })
 
-  const pendingStudents=new Set(pendingNotesRows.map(r=>r.documento||r.estudiante).filter(Boolean))
+  const pendingStudents=new Set(visiblePendingNotesRows.map(r=>r.documento||r.estudiante).filter(Boolean))
 
   function downloadPendingNotes(){
     const headers=['Estudiante','Identificación','Programa','Modalidad','Bloque','Corte','Asignatura','Docente','% cargado','% esperado','% faltante','Promedio evaluación']
@@ -772,15 +779,29 @@ function Dashboard({profile}){
           <button className="primary inline" onClick={downloadPendingNotes}><FileDown size={16}/>Descargar</button>
         </div>
         <div className="stats" style={{marginBottom:18}}>
-          <div className="card stat"><span>Registros pendientes</span><strong>{pendingNotesRows.length}</strong><small>asignaturas con cargue incompleto</small></div>
+          <div className="card stat"><span>Registros pendientes</span><strong>{visiblePendingNotesRows.length}</strong><small>asignaturas con cargue incompleto</small></div>
           <div className="card stat"><span>Estudiantes</span><strong>{pendingStudents.size}</strong><small>con al menos una nota pendiente</small></div>
           <div className="card stat"><span>Cargue completo</span><strong>{filtered.length-pendingNotesRows.length}</strong><small>registros al porcentaje esperado</small></div>
         </div>
         <div style={{display:'flex',flexWrap:'wrap',gap:14,alignItems:'end',marginBottom:18}}>
-          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280}}>Buscar
-            <input type="search" placeholder="Estudiante, identificación, asignatura o docente" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Programa
+            <select value={pendingProgram} onChange={e=>{setPendingProgram(e.target.value);setPendingTeacher('')}}>
+              <option value="">Todos</option>
+              {pendingPrograms.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
           </label>
-          <button className="refresh" onClick={()=>setPendingNotesSearch('')}>Limpiar búsqueda</button>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:260}}>Docente
+            <select value={pendingTeacher} onChange={e=>setPendingTeacher(e.target.value)}>
+              <option value="">Todos</option>
+              {pendingTeachers
+                .filter(t=>!pendingProgram || pendingNotesRows.some(r=>r.programa===pendingProgram && r.docente===t))
+                .map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          </label>
+          <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280}}>Buscar
+            <input type="search" placeholder="Estudiante, identificación o asignatura" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
+          </label>
+          <button className="refresh" onClick={()=>{setPendingProgram('');setPendingTeacher('');setPendingNotesSearch('')}}>Limpiar filtros</button>
         </div>
         <p className="muted">{visiblePendingNotesRows.length} registros en el listado · Reglas de cargue esperado: presencial 30% / 60% / 100%; virtual 40% / 100% por bloque.</p>
         <SimpleTable columns={[
