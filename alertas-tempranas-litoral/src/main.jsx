@@ -824,12 +824,13 @@ function Dashboard({profile}){
             </select>
           </label>
           <label style={{display:'flex',flexDirection:'column',gap:6,minWidth:280}}>Buscar
-            <input type="search" placeholder="Docente, programa o asignatura" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
+            <input type="search" placeholder="Estudiante, docente, programa o asignatura" value={pendingNotesSearch} onChange={e=>setPendingNotesSearch(e.target.value)} style={{padding:'11px 12px',border:'1px solid #d7d1e4',borderRadius:9}}/>
           </label>
           <button className="refresh" onClick={()=>{setPendingProgram('');setPendingTeacher('');setPendingNotesSearch('')}}>Limpiar filtros</button>
         </div>
         <p className="muted">{visiblePendingNotesRows.length} registros en el listado · Reglas de cargue esperado: presencial 30% / 60% / 100%; virtual 40% / 100% por bloque.</p>
         <SimpleTable columns={[
+          {key:'estudiante',label:'Estudiante'},
           {key:'docente',label:'Docente'},
           {key:'programa',label:'Programa'},
           {key:'modalidad',label:'Modalidad'},
