@@ -313,6 +313,7 @@ function AdminUsers(){
   const [bulkRows,setBulkRows]=useState([])
   const [bulkBusy,setBulkBusy]=useState(false)
   const [bulkMsg,setBulkMsg]=useState('')
+  const [bulkResults,setBulkResults]=useState([])
 
   async function callAdmin(body){
     const {data,error}=await supabase.functions.invoke('create-user',{body})
@@ -399,15 +400,19 @@ function AdminUsers(){
   }
   async function createBulkTeachers(){
     if(!bulkRows.length||bulkBusy)return
-    setBulkBusy(true);setBulkMsg('')
+    setBulkBusy(true);setBulkMsg('');setBulkResults([])
     try{
       const {data,error}=await supabase.functions.invoke('bulk-create-teachers',{
         body:{users:bulkRows,redirectTo:window.location.origin}
       })
       if(error)throw error
       if(data?.error)throw new Error(data.error)
-      setBulkMsg(`Cargue finalizado: ${data?.created||0} usuarios creados y ${data?.failed||0} con novedad.`)
-      if((data?.created||0)>0){setBulkRows([]);await loadUsers()}
+      if(!data || typeof data.created!=='number' || typeof data.failed!=='number' || !Array.isArray(data.results)){
+        throw new Error('La función respondió, pero no devolvió el formato esperado. Revisa que bulk-create-teachers tenga desplegado el código actualizado.')
+      }
+      setBulkResults(data.results)
+      setBulkMsg(`Cargue finalizado: ${data.created} usuarios creados y ${data.failed} con novedad.`)
+      if(data.created>0)await loadUsers()
     }catch(err){
       setBulkMsg('No se pudo completar el cargue masivo: '+String(err?.message||err))
     }finally{setBulkBusy(false)}
@@ -432,7 +437,7 @@ function AdminUsers(){
         <button type="button" className="refresh" onClick={downloadTeacherTemplate}><FileDown size={16}/>Descargar plantilla</button>
         <label className="primary inline" style={{cursor:'pointer'}}>Seleccionar CSV<input type="file" accept=".csv,text/csv" onChange={loadBulkFile} style={{display:'none'}}/></label>
         {bulkRows.length>0&&<button type="button" className="primary inline" onClick={createBulkTeachers} disabled={bulkBusy}>{bulkBusy?'Creando usuarios…':`Crear ${bulkRows.length} usuarios docentes`}</button>}
-        {bulkRows.length>0&&<button type="button" className="ghost small" onClick={()=>{setBulkRows([]);setBulkMsg('')}} disabled={bulkBusy}>Cancelar</button>}
+        {bulkRows.length>0&&<button type="button" className="ghost small" onClick={()=>{setBulkRows([]);setBulkMsg('');setBulkResults([])}} disabled={bulkBusy}>Cancelar</button>}
       </div>
       {bulkRows.length>0&&<div style={{overflowX:'auto'}}>
         <table className="data-table"><thead><tr><th>Nombre</th><th>Correo</th><th>Docente vinculado</th></tr></thead>
@@ -440,6 +445,10 @@ function AdminUsers(){
         {bulkRows.length>20&&<p className="muted">Vista previa de 20 de {bulkRows.length} registros.</p>}
       </div>}
       {bulkMsg&&<p className="notice">{bulkMsg}</p>}
+      {bulkResults.length>0&&<div style={{overflowX:'auto',marginTop:12}}>
+        <table className="data-table"><thead><tr><th>Correo</th><th>Resultado</th><th>Detalle</th></tr></thead>
+        <tbody>{bulkResults.map((r,i)=><tr key={i}><td>{r.email||'—'}</td><td><span className={'status-badge '+(r.ok?'on':'off')}>{r.ok?'Creado':'Novedad'}</span></td><td>{r.ok?'Invitación enviada':r.error||'Sin detalle'}</td></tr>)}</tbody></table>
+      </div>}
     </section>
     <section className="card page-card">
       <div className="section-head"><div><h2>Usuarios registrados</h2><p className="muted">Administra roles y accesos sin entrar a Supabase.</p></div><button className="refresh" onClick={loadUsers} disabled={loading}><RefreshCw size={16}/>{loading?'Actualizando…':'Actualizar'}</button></div>
