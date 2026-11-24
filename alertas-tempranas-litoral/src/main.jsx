@@ -8,6 +8,7 @@ import {
 import { supabase } from './supabase'
 import FollowupHistoryButton from './FollowupHistory'
 import TeacherProfile from './TeacherProfile'
+import ETDHPanel from './ETDHPanel'
 import './styles.css'
 
 const SHEET_ID = '1PCA-H_KFyTOb_d1ry35dtDkYcCBIEshtDlyP3WSM1OU'
@@ -975,6 +976,7 @@ function Dashboard({profile}){
       ['inicio','Inicio',LayoutDashboard],
       ['estudiantes','Estudiantes',Users],
       ['programas','Programas',GraduationCap],
+      ['etdh','ETDH',GraduationCap],
       ['docentes','Docentes',UserRound],
       ['asignaturas','Asignaturas',BookOpen],
       ['notas-pendientes','Notas pendientes',AlertTriangle],
@@ -992,7 +994,7 @@ function Dashboard({profile}){
     </aside>
 
     <main>
-      {tab!=='usuarios'&&<FilterBar data={scopedData} filters={filters} setFilters={setFilters}/>} 
+      {!['usuarios','etdh'].includes(tab)&&<FilterBar data={scopedData} filters={filters} setFilters={setFilters}/>} 
       {loading&&<div className="banner info">Actualizando información desde Google Sheets…</div>}
       {dataError&&<div className="banner danger"><AlertTriangle size={18}/><span>{dataError} Verifica que la hoja permita acceso mediante enlace.</span><button onClick={loadData}>Reintentar</button></div>}
       {profile?.role==='docente'&&!profile?.teacher_name&&<div className="banner danger"><AlertTriangle size={18}/><span>Tu usuario docente no tiene un profesor vinculado. Solicita al administrador asociar tu cuenta con el nombre usado en la columna Docente.</span></div>}
@@ -1299,6 +1301,7 @@ function Dashboard({profile}){
         <p className="muted source-note">La fuente configurada corresponde a la pestaña "Notas" de la hoja institucional de Alertas Tempranas. Promedio_evaluacion es acumulado: para identificar pérdida del corte se calcula el aporte del corte actual restando el acumulado del corte anterior. Presencial: C1 mínimo 0,9; C2 aporte mínimo 0,9; C3 aporte mínimo 1,2. Virtual: C1 mínimo 1,2; C2 aporte mínimo 1,8. Los registros sin evaluación no se clasifican como pérdida.</p>
       </section>}
 
+      {tab==='etdh'&&profile?.role!=='docente'&&<ETDHPanel profile={profile}/>}
       {tab==='usuarios'&&profile?.role==='admin'&&<AdminUsers/>}
     </main>
   </div>
