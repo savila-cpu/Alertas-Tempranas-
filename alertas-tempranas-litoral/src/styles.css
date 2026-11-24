@@ -140,3 +140,25 @@ tbody tr:hover{background:#faf8ff}
 .teacher-pending-row b{font-size:12px;color:#cc5a5a;white-space:nowrap}
 @media(max-width:1050px){.teacher-profile-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.teacher-profile-hero{align-items:flex-start;flex-direction:column}.teacher-avatar{width:112px;height:112px}.teacher-profile-stats{grid-template-columns:1fr}.teacher-form-grid{grid-template-columns:1fr}}
+
+.etdh-page{display:flex;flex-direction:column;gap:18px}
+.etdh-banner{display:flex;align-items:center;gap:18px;padding:18px 22px;background:linear-gradient(135deg,#f3effc,#fff)}
+.etdh-banner>div{display:flex;flex-direction:column;min-width:120px}
+.etdh-banner span{font-size:12px;color:#7f748e}
+.etdh-banner strong{font-size:34px;color:#6f55cf}
+.etdh-banner p{margin:0;color:#5f566c;line-height:1.5}
+.etdh-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.etdh-student-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end;padding:16px;background:#faf8fd;border:1px solid #ece7f4;border-radius:14px;margin-bottom:16px}
+.etdh-student-form label,.etdh-filters label,.etdh-grade-grid label,.etdh-observations{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#6f6780}
+.etdh-student-form input,.etdh-student-form select,.etdh-filters select,.etdh-filters input,.etdh-grade-grid input,.etdh-observations textarea{border:1px solid #d9d2e7;border-radius:10px;padding:10px 11px;background:#fff;color:#2f2442}
+.etdh-filters{display:grid;grid-template-columns:minmax(200px,1fr) 180px minmax(260px,1.4fr);gap:12px;align-items:end;margin:14px 0}
+.etdh-search>div{display:flex;align-items:center;gap:8px;border:1px solid #d9d2e7;border-radius:10px;padding:0 10px;background:#fff}
+.etdh-search>div input{border:0;outline:0;width:100%;padding-left:0}
+.etdh-table-wrap{overflow-x:auto}
+.etdh-table td{vertical-align:top}
+.etdh-edit-card{border:2px solid #8e72de}
+.etdh-grade-grid{display:grid;grid-template-columns:2fr repeat(3,1fr);gap:12px;margin-bottom:14px}
+.etdh-observations textarea{resize:vertical;margin-bottom:12px}
+.etdh-load-note{display:flex;align-items:flex-start;gap:9px;background:#f5f1fd;border-radius:10px;padding:11px 12px;margin-bottom:14px;color:#5e526d;font-size:13px}
+@media(max-width:1100px){.etdh-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.etdh-student-form{grid-template-columns:repeat(2,minmax(0,1fr))}.etdh-grade-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.etdh-filters{grid-template-columns:1fr 1fr}.etdh-search{grid-column:1/-1}}
+@media(max-width:650px){.etdh-banner{align-items:flex-start;flex-direction:column}.etdh-stats,.etdh-student-form,.etdh-grade-grid,.etdh-filters{grid-template-columns:1fr}.etdh-search{grid-column:auto}}
